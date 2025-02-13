@@ -1,0 +1,3 @@
+commands:
+  - echo "$TEST" | base64
+  - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"

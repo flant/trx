@@ -1,0 +1,32 @@
+repo:
+  url: "https://github.com/werf/werf.git"
+  auth: #optional if repo requires no auth
+    sshKeyPath: "/home/user/.ssh/id_rsa" 
+    sshKeyPassword: "supersecret" #optional
+    basic: 
+      username: "gituser" #any string
+      password: "gitpassword"
+  initialLastprocessedTag: 'v0.0.0' #optional
+
+quorums:
+  - name: main #optional
+    minNumberOfKeys: 1
+    gpgKeyPaths:
+      - "public_key.asc"
+  - name: backup #optional
+    minNumberOfKeys: 1
+    gpgKeys:
+      - |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+        ...
+        -----END PGP PUBLIC KEY BLOCK-----
+
+# optional parameters
+commandsFilePath: "/path/runner-cmd.yaml" #optional
+env:
+  TEST: "True"
+hooks:
+  onCommandSkiped:
+    - "echo skipped"
+  onCommandSuccess:
+    - "echo success"
