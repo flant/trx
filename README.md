@@ -1,93 +1,230 @@
-# Yet Another TRDL
+# TRX
 
+## Getting Started
 
+"TRX" helps you release versions approved by team members in restricted environments if a quorum is reached.  
+A quorum is considered reached if the required number of GPG signatures is present on the tag.
 
-## Getting started
+## Admin Guide
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://fox.flant.com/deckhouse/delivery/yet-another-trdl.git
-git branch -M main
-git push -uf origin main
+### Clone the Repository  
+To begin, clone the repository to your server:
+```sh
+git clone https://fox.flant.com/deckhouse/delivery/yet-another-trdl.git
+cd yet-another-trdl
 ```
 
-## Integrate with your tools
+### Build the Binary  
+Ensure you have Go installed (version 1.23 or later). Then, build the binary:
+```sh
+cd cmd/trx
+go build -o trx main.go
+```
 
-- [ ] [Set up project integrations](https://fox.flant.com/deckhouse/delivery/yet-another-trdl/-/settings/integrations)
+This will generate an executable file named `trx`.  
+Now set up the configuration and use it based on your scenario (run manually, schedule in cron, integrate into CI, etc.).
 
-## Collaborate with your team
+If you are familliar with `go-task` look into `Taskfile.dist.yaml` for most common actions.
+See more about `task`: https://taskfile.dev/
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+## Configure Git Signatures
 
-## Test and Deploy
+### Setting Up a GPG Signature in Git
+Git provides a mechanism for signing new tags (releases) and individual commits. The GPG signature becomes an integral part of the Git tag or commit. However, this approach supports only one signature.
 
-Use the built-in continuous integration in GitLab.
+The [signatures](https://github.com/werf/third-party-git-signatures) plugin allows signing Git tags and commits after they are created. In this case, GPG signatures are stored in Git notes. Multiple signatures can be used without affecting the linked Git tag or commit.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+To create GPG signatures, set up GPG and Git correctly using this [guide](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work#_gpg_introduction).
 
-***
+> **IMPORTANT NOTE:** Only RSA keys currently supported.
 
-# Editing this README
+### Installing the Signatures Plugin
+Install the plugin in a directory included in `PATH` (e.g., `~/bin`):
+```sh
+git clone https://github.com/werf/third-party-git-signatures.git
+cd third-party-git-signatures
+install bin/git-signatures ~/bin
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### Adding a Signature to a Tag
+Once a Git tag is published, it must be signed by a sufficient number of trusted GPG keys. Each quorum member specified in the plugin configuration must sign the Git tag and publish their GPG signature:
+```sh
+git fetch --tags
+git signatures pull
+git signatures add --push v0.0.1
+```
 
-## Suggestions for a good README
+> **IMPORTANT NOTE:** Tags should satisfy semver notation. Read more about semver [here](https://semver.org/)
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Configure Quorum Runner
 
-## Name
-Choose a self-explaining name for your project.
+The config file can be specified using the `--config` flag or the default path `./trx.yaml`.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Configure the Git Repository
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+You can specify a Git repository to be cloned via HTTP/HTTPS:
+```yaml
+repo:
+  url: "https://github.com/werf/werf.git"
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+or via SSH:
+```yaml
+repo:
+  url: "git@github.com:werf/werf.git"
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+If authentication is required:
+- **Cloning via HTTP:**
+```yaml
+repo:
+  url: "https://github.com/werf/werf.git"
+  auth:
+    basic:
+      username: "username"
+      password: "password"
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+- **Cloning via SSH:**
+```yaml
+repo:
+  url: "git@github.com:werf/werf.git"
+  auth:
+    sshKeyPath: "/path/to/key"
+    sshKeyPassword: <optional>
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### Configure Last Published Tag
+You can track the last published commit to prevent redundant executions:
+```yaml
+repo:
+  url: "https://github.com/werf/werf.git"
+  auth:
+    basic:
+      username: "username"
+      password: "password"
+  initialLastprocessedTag: 'v0.0.0'
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+From this point, the task runner will track the last published commit in local storage and skip execution if the version is less or equal than `initialLastprocessedTag` or last successed tag. If you change the commit under the tag trx will NOT perform the task. Tags considered as immutable.
+You can configure corresponding hooks for this event.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Configure Quorums
+Specify quorum requirements and member keys:
+```yaml
+quorums:
+  - name: developers
+    minNumberOfKeys: 3
+    gpgKeyPaths:
+      - "public_key.asc"
+    gpgKeys:
+      - |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+        ...
+        -----END PGP PUBLIC KEY BLOCK-----
+      - |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+        ...
+        -----END PGP PUBLIC KEY BLOCK-----
+  - name: managers
+    minNumberOfKeys: 3
+    gpgKeyPaths:
+      - "public_key.asc"
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+To export a GPG key, use:
+```sh
+gpg --armor --export E222D5A4896356FA5ABC8FA8E675FCC70C91EC4B
+```
+Or save it to a file:
+```sh
+gpg --armor --export E222D5A4896356FA5ABC8FA8E675FCC70C91EC4B > public_key.asc
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### Configure Commands to Run
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+By default commands should be specified in `trx-cfg.yaml` file located in your git repository root.
+If you want to rewrite default location use `commandsFilePath` directive in config file (default: `trx.yaml`).
+Ensure that you specify the path relative to your repository location.
 
-## License
-For open source projects, say how it is licensed.
+> **NOTE:** `trx.yaml` usually manged by dev team to describe overall process while `trx-cfg.yaml` is supposed to be managed by operations team since they know how exactly to deploy(deliver)
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+```yaml
+#runner-cmd.yaml
+commands:
+  - echo "$TEST" | base64
+  - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
+  - /Users/flant/test.sh
+```
+
+> **NOTE:** You can use template variables `{{ .RepoTag }}`, `{{ .RepoCommit }}`, `{{ .RepoUrl }}`.
+
+### Configure Environment Variables
+Set environment variables for command execution:
+```yaml
+env:
+  TEST: "Test"
+  TEST2: "tset"
+```
+> **NOTE:** Variables are forced to uppercase. Existing OS variables are appended.
+
+### Configure Hooks
+Define hooks for specific events:
+```yaml
+hooks:
+  onCommandSkipped:
+    - "echo SKIPPED"
+```
+Available hooks:
+- `onCommandSuccess` - When a command runs successfully.
+- `onCommandFailure` - When a command fails.
+- `onCommandSkipped` - When a command is skipped (e.g., tag is already released).
+- `onQuorumFailure` - When quorum requirements are not met. `{{ .FailedQuorumName }}` is available
+
+> **NOTE:** Hooks support template variables like `{{ .RepoTag }}`, `{{ .RepoCommit }}`, `{{ .RepoUrl }}`.
+
+### Configure the Command to Run (Deprecated)
+Use the `command` directive (deprecated) to execute a shell command:
+```yaml
+command:
+  - task
+  - format
+```
+
+## Configuration Example
+See `trx.yaml` for reference.
+
+```yaml
+repo:
+  url: "https://github.com/werf/werf.git"
+  auth: #optional, if repo requires no auth
+    sshKeyPath: "/home/user/.ssh/id_rsa" 
+    sshKeyPassword: "supersecret" #optional
+    basic: 
+      username: "gituser" #any string
+      password: "gitpassword" #optional
+  initialLastprocessedTag: 'v0.0.0' #optional
+
+quorums:
+  - name: main #optional
+    minNumberOfKeys: 1
+    gpgKeyPaths:
+      - "public_key.asc"
+  - name: backup #optional
+    minNumberOfKeys: 1
+    gpgKeys:
+      - |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+        ...
+        -----END PGP PUBLIC KEY BLOCK-----
+
+commandsFilePath: #optional, default is runner-cmd.yaml in repo
+
+# optional parameters
+env:
+  TEST: "True"
+hooks:
+  onCommandSkiped:
+    - "echo skipped"
+  onCommandSuccess:
+    - "echo success"

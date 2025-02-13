@@ -1,0 +1,17 @@
+version: "3"
+
+tasks:
+  lint:
+    desc: 'Lint with golangci-lint'
+    cmds:
+      - golangci-lint run
+    
+  test:
+    desc: 'Run unit tests'
+    cmds:
+      - go test -v ./...
+ 
+  build:
+    desc: 'Build app'
+    cmds:
+      - go build -o bin/trx cmd/trx/main.go  

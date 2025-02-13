@@ -1,0 +1,24 @@
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gocritic
+    - gocyclo
+    - goimports
+    - misspell
+  disable:
+    - deadcode
+    - varcheck
+
+linters-settings:
+  misspell:
+    locale: US
+issues:
+  max-issues-per-linter: 0
+  exclude-rules:
+    - path: _test\.go
+      text: "Error return value is not checked"
+      linters:
+        - errcheck
