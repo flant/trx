@@ -193,6 +193,7 @@ Available hooks:
 - `onCommandFailure` - When a command fails.
 - `onCommandSkipped` - When a command is skipped (e.g., tag is already released).
 - `onQuorumFailure` - When quorum requirements are not met. `{{ .FailedQuorumName }}` is available
+- `onCommandStarted` - When command is about to run. Hook itself runns asynchronously
 
 > **NOTE:** Hooks support template variables like `{{ .RepoTag }}`, `{{ .RepoCommit }}`, `{{ .RepoUrl }}`.
 

@@ -48,8 +48,9 @@ type Quorum struct {
 type Hooks struct {
 	OnCommandSuccess *[]string `mapstructure:"onCommandSuccess,omitempty"`
 	OnCommandFailure *[]string `mapstructure:"onCommandFailure,omitempty"`
-	OnCommandSkiped  *[]string `mapstructure:"onCommandSkiped,omitempty"`
+	OnCommandSkiped  *[]string `mapstructure:"onCommandSkipped,omitempty"`
 	OnQuorumFailure  *[]string `mapstructure:"onQuorumFailure,omitempty"`
+	OnCommandStarted *[]string `mapstructure:"onCommandStarted,omitempty"`
 }
 
 func NewConfig(configPath string) (*Config, error) {

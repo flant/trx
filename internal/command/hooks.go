@@ -5,6 +5,15 @@ import (
 	"trx/internal/config"
 )
 
+func (e *Executor) RunOnCommandStartedHook(cfg *config.Config) error {
+	if cfg.Hooks != nil && cfg.Hooks.OnCommandStarted != nil {
+		if err := e.Exec(*cfg.Hooks.OnCommandStarted); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Executor) RunOnCommandSuccessHook(cfg *config.Config) error {
 	if cfg.Hooks != nil && cfg.Hooks.OnCommandSuccess != nil {
 		log.Println("Running onCommandSuccess hook")
@@ -27,7 +36,7 @@ func (e *Executor) RunOnCommandFailureHook(cfg *config.Config) error {
 
 func (e *Executor) RunOnCommandSkippedHook(cfg *config.Config) error {
 	if cfg.Hooks != nil && cfg.Hooks.OnCommandSkiped != nil {
-		log.Println("Running onCommandSkiped hook")
+		log.Println("Running onCommandSkipped hook")
 		if err := e.Exec(*cfg.Hooks.OnCommandSkiped); err != nil {
 			return err
 		}

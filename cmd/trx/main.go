@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 	"trx/internal/command"
 	"trx/internal/config"
 	"trx/internal/git"
@@ -46,6 +47,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 func run() error {
 	log.SetFlags(0)
 	log.Println("Running trx")
+	log.Printf("Start at %s\n", time.Now().Format("2006-01-02 15:04:05"))
 
 	cfg, err := config.NewConfig(configPath)
 	if err != nil {
@@ -76,6 +78,7 @@ func run() error {
 		if hookErr := executor.RunOnCommandSkippedHook(cfg); hookErr != nil {
 			log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
 		}
+		log.Println("no new version. execution will be skipped")
 		return nil
 	}
 
@@ -93,24 +96,33 @@ func run() error {
 		}
 	}
 
+	var cmdsToRun []string
 	if len(cfg.Commands) > 0 {
-		if err := executor.Exec(cfg.Commands); err != nil {
-			if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
-				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
-			}
-			return fmt.Errorf("run command error: %w", err)
-		}
+		cmdsToRun = cfg.Commands
 	} else {
 		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.CommandsFilePath)
 		if err != nil {
 			return fmt.Errorf("config error: %w", err)
 		}
-		if err := executor.Exec(runCfg.Commands); err != nil {
-			if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
-				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
-			}
-			return fmt.Errorf("run command error: %w", err)
+		cmdsToRun = runCfg.Commands
+	}
+
+	if len(cmdsToRun) == 0 {
+		return fmt.Errorf("no commands to run: %w", err)
+	}
+
+	go func() {
+		log.Println("Running onCommandStarted hook")
+		if hookErr := executor.RunOnCommandStartedHook(cfg); hookErr != nil {
+			log.Println("WARNING onCommandStarted hook execution error: %w", hookErr)
 		}
+	}()
+
+	if err := executor.Exec(cmdsToRun); err != nil {
+		if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
+			log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+		}
+		return fmt.Errorf("run command error: %w", err)
 	}
 
 	if err := storage.StoreSuccessedTag(t.Tag); err != nil {

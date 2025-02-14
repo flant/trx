@@ -42,12 +42,16 @@ func NewExecutor(e map[string]string, vars map[string]string) (*Executor, error)
 }
 
 func (e *Executor) Exec(commands []string) error {
-	cmds, err := resolveCommands(commands, e.Vars)
+	cmds, err := resolve(commands, e.Vars)
 	if err != nil {
 		return fmt.Errorf("can't resolve commands: %w", err)
 	}
+	envs, err := resolve(e.Env, e.Vars)
+	if err != nil {
+		return fmt.Errorf("can't resolve envs: %w", err)
+	}
 	for _, c := range cmds {
-		err := execute(c, e.Env, e.WorkDir)
+		err := execute(c, envs, e.WorkDir)
 		if err != nil {
 			return fmt.Errorf("error execute command %s: %w", c, err)
 		}
@@ -55,7 +59,7 @@ func (e *Executor) Exec(commands []string) error {
 	return nil
 }
 
-func resolveCommands(commands []string, vars map[string]string) ([]string, error) {
+func resolve(commands []string, vars map[string]string) ([]string, error) {
 	resolved := make([]string, len(commands))
 	for i, cmd := range commands {
 		resCmd, err := resolveTemplate(cmd, vars)
@@ -133,7 +137,9 @@ func execute(command string, env []string, wd string) error {
 	}()
 
 	var stderr bytes.Buffer
-	io.Copy(&stderr, stderrPipe)
+	if _, err := io.Copy(&stderr, stderrPipe); err != nil {
+		log.Printf("error write stderr buffer: %s", err.Error())
+	}
 
 	if err := cmd.Wait(); err != nil {
 		if stderr.Len() > 0 {
