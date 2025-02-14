@@ -224,7 +224,7 @@ quorums:
         ...
         -----END PGP PUBLIC KEY BLOCK-----
 
-commandsFilePath: #optional, default is runner-cmd.yaml in repo
+commandsFilePath: #optional, default is trx-cfg.yaml in repo
 
 # optional parameters
 env:
