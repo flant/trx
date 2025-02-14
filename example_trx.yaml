@@ -22,7 +22,8 @@ quorums:
         -----END PGP PUBLIC KEY BLOCK-----
 
 # optional parameters
-commandsFilePath: "/path/runner-cmd.yaml" #optional
+commandsFilePath: "/path/trx-cfg.yaml" #optional
+
 env:
   TEST: "True"
 hooks:

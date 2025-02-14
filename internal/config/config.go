@@ -15,9 +15,10 @@ type Config struct {
 	Quorums []Quorum          `mapstructure:"quorums" validate:"required,min=1"`
 	Env     map[string]string `mapstructure:"env"`
 
-	Hooks             *Hooks `mapstructure:"hooks,omitempty"`
-	InitLastPublished string `mapstructure:"initial_last_published_git_commit"`
-	CommandsFilePath  string `mapstructure:"commandsFilePath"`
+	Hooks             *Hooks   `mapstructure:"hooks,omitempty"`
+	InitLastPublished string   `mapstructure:"initial_last_published_git_commit"`
+	CommandsFilePath  string   `mapstructure:"commandsFilePath"`
+	Commands          []string `mapstructure:"commands"`
 }
 
 type GitRepo struct {

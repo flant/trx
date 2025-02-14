@@ -91,7 +91,7 @@ func (r *GitRepo) Open() (*git.Repository, error) {
 	}
 
 	repoName := RepoNameFromUrl(r.Url)
-	repoPath := filepath.Join(usr.HomeDir, ".quorum-runner", repoName)
+	repoPath := filepath.Join(usr.HomeDir, ".trx", repoName)
 
 	var repo *git.Repository
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {

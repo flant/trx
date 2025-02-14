@@ -22,9 +22,9 @@ var configPath string
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "quorum-runner",
+		Use:   "trx",
 		Short: "Runs quorum validation and runs specified command",
-		Long: `quorum-runner is a tool for quorum verification and command execution in a Git repository.
+		Long: `trx is a tool for quorum verification and command execution in a Git repository.
 
 By default, it uses the ./trx.yaml configuration file, but you can specify a different path using the --config flag.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -93,16 +93,34 @@ func run() error {
 		}
 	}
 
+	if len(cfg.Commands) > 0 {
+		if err := executor.Exec(cfg.Commands); err != nil {
+			if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
+				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+			}
+			return fmt.Errorf("run command error: %w", err)
+		}
+	}
+
 	runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.CommandsFilePath)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
 
-	if err := executor.Exec(runCfg.Commands); err != nil {
-		if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
-			log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+	if runCfg != nil {
+		if err := executor.Exec(runCfg.Commands); err != nil {
+			if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
+				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+			}
+			return fmt.Errorf("run command error: %w", err)
 		}
-		return fmt.Errorf("run command error: %w", err)
+	} else {
+		if len(cfg.Commands) == 0 {
+			if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
+				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+			}
+			return fmt.Errorf("no commands in `commands` and in runner config. nothing to execute")
+		}
 	}
 
 	if err := storage.StoreSuccessedTag(t.Tag); err != nil {

@@ -150,7 +150,7 @@ Ensure that you specify the path relative to your repository location.
 > **NOTE:** `trx.yaml` usually manged by dev team to describe overall process while `trx-cfg.yaml` is supposed to be managed by operations team since they know how exactly to deploy(deliver)
 
 ```yaml
-#runner-cmd.yaml
+#trx-cfg.yaml
 commands:
   - echo "$TEST" | base64
   - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
@@ -158,6 +158,19 @@ commands:
 ```
 
 > **NOTE:** You can use template variables `{{ .RepoTag }}`, `{{ .RepoCommit }}`, `{{ .RepoUrl }}`.
+
+Optionally `commands` could be specified in `trx.yaml`. Configuration is the same as for `trx-cfg.yaml`
+
+```yaml
+#trx.yaml
+repo:
+  url: "https://github.com/werf/werf.git"
+commands:
+  - echo "$TEST" | base64
+  - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
+  - /Users/flant/test.sh
+```
+We recommend to use it only for debugging or initial setup
 
 ### Configure Environment Variables
 Set environment variables for command execution:
