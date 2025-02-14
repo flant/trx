@@ -20,6 +20,7 @@ type Storage interface {
 }
 
 var configPath string
+var force bool
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -38,6 +39,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 
 	rootCmd.SilenceUsage = true
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "./trx.yaml", "Path to config file")
+	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Force execution")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
@@ -75,11 +77,16 @@ func run() error {
 		return fmt.Errorf("can't check if tag is new: %w", err)
 	}
 	if !isNewVersion {
-		if hookErr := executor.RunOnCommandSkippedHook(cfg); hookErr != nil {
-			log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
+		switch force {
+		case true:
+			log.Println("No new version, but force flag specified. Proceeding... ")
+		case false:
+			if hookErr := executor.RunOnCommandSkippedHook(cfg); hookErr != nil {
+				log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
+			}
+			log.Println("No new version. execution will be skipped")
+			return nil
 		}
-		log.Println("no new version. execution will be skipped")
-		return nil
 	}
 
 	err = quorum.CheckQuorums(cfg.Quorums, t.Repository, t.Tag)

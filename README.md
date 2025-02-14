@@ -108,6 +108,10 @@ repo:
 
 From this point, the task runner will track the last published commit in local storage and skip execution if the version is less or equal than `initialLastprocessedTag` or last successed tag. If you change the commit under the tag trx will NOT perform the task. Tags considered as immutable.
 You can configure corresponding hooks for this event.
+Use `-f` or `--force` flag to continue execution if no new version found
+```sh
+trx --force
+```
 
 ### Configure Quorums
 Specify quorum requirements and member keys:
