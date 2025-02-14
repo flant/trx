@@ -183,13 +183,6 @@ Available hooks:
 
 > **NOTE:** Hooks support template variables like `{{ .RepoTag }}`, `{{ .RepoCommit }}`, `{{ .RepoUrl }}`.
 
-### Configure the Command to Run (Deprecated)
-Use the `command` directive (deprecated) to execute a shell command:
-```yaml
-command:
-  - task
-  - format
-```
 
 ## Configuration Example
 See `trx.yaml` for reference.
