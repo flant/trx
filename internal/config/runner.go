@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 
 	"github.com/go-playground/validator/v10"
@@ -22,10 +21,7 @@ func NewRunnerConfig(wd, configPath string) (*RunnerConfig, error) {
 
 	err := loadConfig(configPath, func() { _defaultRunner(wd) }, config, config.Validate)
 	if err != nil {
-		// skip for now
-		log.Println("trx-cmd.yaml not found. gracefully proceed")
-		return nil, nil
-		// return nil, err
+		return nil, err
 	}
 
 	return config, nil

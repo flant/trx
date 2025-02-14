@@ -100,26 +100,16 @@ func run() error {
 			}
 			return fmt.Errorf("run command error: %w", err)
 		}
-	}
-
-	runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.CommandsFilePath)
-	if err != nil {
-		return fmt.Errorf("config error: %w", err)
-	}
-
-	if runCfg != nil {
+	} else {
+		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.CommandsFilePath)
+		if err != nil {
+			return fmt.Errorf("config error: %w", err)
+		}
 		if err := executor.Exec(runCfg.Commands); err != nil {
 			if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
 				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
 			}
 			return fmt.Errorf("run command error: %w", err)
-		}
-	} else {
-		if len(cfg.Commands) == 0 {
-			if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
-				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
-			}
-			return fmt.Errorf("no commands in `commands` and in runner config. nothing to execute")
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -115,6 +116,10 @@ func execute(command string, env []string, wd string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting command: %w", err)
@@ -127,7 +132,13 @@ func execute(command string, env []string, wd string) error {
 		}
 	}()
 
+	var stderr bytes.Buffer
+	io.Copy(&stderr, stderrPipe)
+
 	if err := cmd.Wait(); err != nil {
+		if stderr.Len() > 0 {
+			log.Println("executiong error:", stderr.String())
+		}
 		return fmt.Errorf("error executing command: %w", err)
 	}
 	return nil
