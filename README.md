@@ -24,7 +24,7 @@ go build -o trx main.go
 This will generate an executable file named `trx`.  
 Now set up the configuration and use it based on your scenario (run manually, schedule in cron, integrate into CI, etc.).
 
-If you are familliar with `go-task` look into `Taskfile.dist.yaml` for most common actions.
+If you are familiar with `go-task` look into `Taskfile.dist.yaml` for most common actions.
 See more about `task`: https://taskfile.dev/
 
 ## Configure Git Signatures
@@ -103,10 +103,10 @@ repo:
     basic:
       username: "username"
       password: "password"
-  initialLastprocessedTag: 'v0.0.0'
+  initialLastProcessedTag: 'v0.0.0'
 ```
 
-From this point, the task runner will track the last published commit in local storage and skip execution if the version is less or equal than `initialLastprocessedTag` or last successed tag. If you change the commit under the tag trx will NOT perform the task. Tags considered as immutable.
+From this point, the task runner will track the last published commit in local storage and skip execution if the version is less or equal than `initialLastProcessedTag` or last succeed tag. If you change the commit under the tag trx will NOT perform the task. Tags considered as immutable.
 You can configure corresponding hooks for this event.
 Use `-f` or `--force` flag to continue execution if no new version found
 ```sh
@@ -196,8 +196,8 @@ Available hooks:
 - `onCommandSuccess` - When a command runs successfully.
 - `onCommandFailure` - When a command fails.
 - `onCommandSkipped` - When a command is skipped (e.g., tag is already released).
-- `onQuorumFailure` - When quorum requirements are not met. `{{ .FailedQuorumName }}` is available
-- `onCommandStarted` - When command is about to run. Hook itself runns asynchronously
+- `onQuorumFailure` - When quorum requirements are not met. `{{ .FailedQuorumName }}` is available.
+- `onCommandStarted` - When command is about to run. Hook itself runs asynchronously.
 
 > **NOTE:** Hooks support template variables like `{{ .RepoTag }}`, `{{ .RepoCommit }}`, `{{ .RepoUrl }}`.
 
@@ -214,7 +214,7 @@ repo:
     basic: 
       username: "gituser" #any string
       password: "gitpassword" #optional
-  initialLastprocessedTag: 'v0.0.0' #optional
+  initialLastProcessedTag: 'v0.0.0' #optional
 
 quorums:
   - name: main #optional
@@ -235,7 +235,7 @@ commandsFilePath: #optional, default is trx-cfg.yaml in repo
 env:
   TEST: "True"
 hooks:
-  onCommandSkiped:
+  onCommandSkipped:
     - "echo skipped"
   onCommandSuccess:
     - "echo success"

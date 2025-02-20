@@ -5,8 +5,8 @@ repo:
     sshKeyPassword: "supersecret" #optional
     basic: 
       username: "gituser" #any string
-      password: "gitpassword"
-  initialLastprocessedTag: 'v0.0.0' #optional
+      password: "gitpass"
+  initialLastProcessedTag: 'v0.0.0' #optional
 
 quorums:
   - name: main #optional
@@ -27,7 +27,7 @@ commandsFilePath: "/path/trx-cfg.yaml" #optional
 env:
   TEST: "True"
 hooks:
-  onCommandSkiped:
+  onCommandSkipped:
     - "echo skipped"
   onCommandSuccess:
     - "echo success"

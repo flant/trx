@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	file_last_published = "last_published_commit"
+	fileLastProcessedCommit = "last_processed_commit"
 )
 
 type Local struct {
@@ -26,8 +26,8 @@ func NewLocalStorage(repoUrl string) *Local {
 	}
 }
 
-func (s *Local) CheckLastSuccessedTag() (string, error) {
-	filePath := filepath.Join(s.path, file_last_published)
+func (s *Local) CheckLastSucceedTag() (string, error) {
+	filePath := filepath.Join(s.path, fileLastProcessedCommit)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -45,7 +45,7 @@ func (s *Local) CheckLastSuccessedTag() (string, error) {
 	return commit, nil
 }
 
-func (s *Local) StoreSuccessedTag(commit string) error {
+func (s *Local) StoreSucceedTag(commit string) error {
 	if commit == "" {
 		return fmt.Errorf("tag can't be empty")
 	}
@@ -54,7 +54,7 @@ func (s *Local) StoreSuccessedTag(commit string) error {
 		return err
 	}
 
-	filePath := filepath.Join(s.path, file_last_published)
+	filePath := filepath.Join(s.path, fileLastProcessedCommit)
 
 	return os.WriteFile(filePath, []byte(commit+"\n"), 0644)
 }

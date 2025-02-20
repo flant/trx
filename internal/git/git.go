@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -26,16 +27,16 @@ import (
 	trdlGit "github.com/werf/trdl/server/pkg/git"
 )
 
-type GitRepo struct {
+type Repo struct {
 	Url  string
 	Auth *Auth
 }
 
 type Auth struct {
-	AuthMetod transport.AuthMethod
+	AuthMethod transport.AuthMethod
 }
 
-func NewGitRepo(config config.GitRepo) (*GitRepo, error) {
+func NewRepo(config config.GitRepo) (*Repo, error) {
 	if config.Url == "" {
 		return nil, fmt.Errorf("git url not specified")
 	}
@@ -45,7 +46,7 @@ func NewGitRepo(config config.GitRepo) (*GitRepo, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &GitRepo{
+		return &Repo{
 			Url:  config.Url,
 			Auth: auth,
 		}, nil
@@ -55,7 +56,7 @@ func NewGitRepo(config config.GitRepo) (*GitRepo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &GitRepo{
+	return &Repo{
 		Url:  config.Url,
 		Auth: auth,
 	}, nil
@@ -66,25 +67,25 @@ func NewSshAuth(key, password string) (*Auth, error) {
 		return nil, nil
 	}
 	sshKey, _ := os.ReadFile(key)
-	publicKey, err := ssh.NewPublicKeys("git", []byte(sshKey), password)
+	publicKey, err := ssh.NewPublicKeys("git", sshKey, password)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get ssh public key: %w", err)
 	}
 	return &Auth{
-		AuthMetod: publicKey,
+		AuthMethod: publicKey,
 	}, nil
 }
 
 func NewBasicAuth(username, password string) (*Auth, error) {
 	return &Auth{
-		AuthMetod: &http.BasicAuth{
+		AuthMethod: &http.BasicAuth{
 			Username: username,
 			Password: password,
 		},
 	}, nil
 }
 
-func (r *GitRepo) Open() (*git.Repository, error) {
+func (r *Repo) Open() (*git.Repository, error) {
 	usr, err := user.Current()
 	if err != nil {
 		return nil, err
@@ -97,7 +98,7 @@ func (r *GitRepo) Open() (*git.Repository, error) {
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		cloneOptions := &git.CloneOptions{URL: r.Url}
 		if r.Auth != nil {
-			cloneOptions.Auth = r.Auth.AuthMetod
+			cloneOptions.Auth = r.Auth.AuthMethod
 		}
 
 		log.Printf("Cloning %s into %s\n", r.Url, repoPath)
@@ -121,10 +122,10 @@ func (r *GitRepo) Open() (*git.Repository, error) {
 		},
 	}
 	if r.Auth != nil {
-		fetchOptions.Auth = r.Auth.AuthMetod
+		fetchOptions.Auth = r.Auth.AuthMethod
 	}
 	err = repo.Fetch(fetchOptions)
-	if err != nil && err != git.NoErrAlreadyUpToDate {
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil, fmt.Errorf("unable to fetch tags: %w", err)
 	}
 
@@ -229,7 +230,7 @@ type TargetGitObject struct {
 }
 
 func GetTargetGitObject(cfg config.GitRepo) (*TargetGitObject, error) {
-	repo, err := NewGitRepo(cfg)
+	repo, err := NewRepo(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("initialize git client error: %w", err)
 	}
