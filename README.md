@@ -203,25 +203,33 @@ Available hooks:
 
 
 ## Configuration Example
+
 See `trx.yaml` for reference.
 
 ```yaml
 repo:
   url: "https://github.com/werf/werf.git"
-  auth: #optional, if repo requires no auth
+  
+  # Optional, required if the repository needs authentication.
+  auth:
     sshKeyPath: "/home/user/.ssh/id_rsa" 
-    sshKeyPassword: "supersecret" #optional
-    basic: 
-      username: "gituser" #any string
-      password: "gitpassword" #optional
-  initialLastProcessedTag: 'v0.0.0' #optional
+    sshKeyPassword: "supersecret"
+    basic:
+      username: "gituser" 
+      password: "gitpass"
+
+  # Optional, default is `trx.yaml` in the repository.
+  configFile: "trx.yaml"
+  
+  # Optional. The parameter ensures that processing starts from a specific tag and prevents the processing of older tags, acting as a safeguard against freeze attacks.
+  initialLastProcessedTag: "v0.10.1"
 
 quorums:
-  - name: main #optional
-    minNumberOfKeys: 1
+  - name: main
+    minNumberOfKeys: 1  
     gpgKeyPaths:
       - "public_key.asc"
-  - name: backup #optional
+  - name: admin
     minNumberOfKeys: 1
     gpgKeys:
       - |
@@ -229,13 +237,18 @@ quorums:
         ...
         -----END PGP PUBLIC KEY BLOCK-----
 
-commandsFilePath: #optional, default is trx-cfg.yaml in repo
-
-# optional parameters
 env:
   TEST: "True"
+
 hooks:
-  onCommandSkipped:
-    - "echo skipped"
+  onCommandStarted:
+    - "echo 'Command started: {{ .RepoTag }} at {{ .RepoCommit }}'"
   onCommandSuccess:
-    - "echo success"
+    - "echo 'Success: {{ .RepoTag }}'"
+  onCommandFailure:
+    - "echo 'Failure: {{ .RepoTag }}'"
+  onCommandSkipped:
+    - "echo 'Skipped: {{ .RepoTag }}'"
+  onQuorumFailure:
+    - "echo 'Quorum {{ .FailedQuorumName }} failed'"
+```
