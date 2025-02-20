@@ -35,9 +35,9 @@ func (e *Executor) RunOnCommandFailureHook(cfg *config.Config) error {
 }
 
 func (e *Executor) RunOnCommandSkippedHook(cfg *config.Config) error {
-	if cfg.Hooks != nil && cfg.Hooks.OnCommandSkiped != nil {
+	if cfg.Hooks != nil && cfg.Hooks.OnCommandSkipped != nil {
 		log.Println("Running onCommandSkipped hook")
-		if err := e.Exec(*cfg.Hooks.OnCommandSkiped); err != nil {
+		if err := e.Exec(*cfg.Hooks.OnCommandSkipped); err != nil {
 			return err
 		}
 	}

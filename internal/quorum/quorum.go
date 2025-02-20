@@ -11,16 +11,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type QuorumError struct {
+type Error struct {
 	QuorumName string
 	Err        error
 }
 
-func (e *QuorumError) Error() string {
+func (e *Error) Error() string {
 	return fmt.Sprintf("quorum `%s` error: %v", e.QuorumName, e.Err)
 }
 
-func (e *QuorumError) Unwrap() error {
+func (e *Error) Unwrap() error {
 	return e.Err
 }
 
@@ -31,7 +31,7 @@ func CheckQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 			log.Printf("Verifying quorum %s\n", *q.Name)
 			keys, err := parseGPGKeys(q.GPGKeys, q.GPGKeyFilesPaths)
 			if err != nil {
-				return &QuorumError{QuorumName: *q.Name, Err: fmt.Errorf("quorum `%s` error reading GPG keys: %w", *q.Name, err)}
+				return &Error{QuorumName: *q.Name, Err: fmt.Errorf("quorum `%s` error reading GPG keys: %w", *q.Name, err)}
 			}
 			err = trdlGit.Verify(repo, trdlGit.VerifyTagSignaturesRequest{
 				Tag:          tag,
@@ -39,7 +39,7 @@ func CheckQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 				GPGKeys:      keys,
 			})
 			if err != nil {
-				return &QuorumError{QuorumName: *q.Name, Err: err}
+				return &Error{QuorumName: *q.Name, Err: err}
 			}
 			return nil
 		})
@@ -51,7 +51,7 @@ func CheckQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 }
 
 func parseGPGKeys(plain, files []string) ([]string, error) {
-	res := []string{}
+	var res []string
 	for _, f := range files {
 		data, err := os.ReadFile(f)
 		if err != nil {

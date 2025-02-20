@@ -30,7 +30,7 @@ func NewExecutor(e map[string]string, vars map[string]string) (*Executor, error)
 	if wd == "" {
 		wd, _ = os.Getwd()
 	}
-	envs := []string{}
+	var envs []string
 	for k, v := range e {
 		envs = append(envs, fmt.Sprintf("%s=%s", strings.ToUpper(k), v))
 	}
@@ -85,33 +85,6 @@ func resolveTemplate(tmpl string, vars map[string]string) (string, error) {
 	return buf.String(), nil
 }
 
-type Command struct {
-	Command string
-	Args    []string
-	WorkDir string
-	Env     []string
-}
-
-func NewCommand(c []string, env map[string]string) *Command {
-	if WorkDir == "" {
-		WorkDir, _ = os.Getwd()
-	}
-	log.Printf("Trying to run command %v\n", c)
-	envs := []string{}
-	for k, v := range env {
-		envs = append(envs, fmt.Sprintf("%s=%s", strings.ToUpper(k), v))
-	}
-	return &Command{
-		Command: strings.Join(c, " "),
-		WorkDir: WorkDir,
-		Env:     envs,
-	}
-}
-
-func (c *Command) Exec() error {
-	return execute(c.Command, c.Env, c.WorkDir)
-}
-
 func execute(command string, env []string, wd string) error {
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = wd
@@ -143,7 +116,7 @@ func execute(command string, env []string, wd string) error {
 
 	if err := cmd.Wait(); err != nil {
 		if stderr.Len() > 0 {
-			log.Println("executiong error:", stderr.String())
+			log.Println("executing error:", stderr.String())
 		}
 		return fmt.Errorf("error executing command: %w", err)
 	}

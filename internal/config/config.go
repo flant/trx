@@ -24,7 +24,7 @@ type Config struct {
 type GitRepo struct {
 	Url                     string      `mapstructure:"url" validate:"required"`
 	Auth                    GitRepoAuth `mapstructure:"auth"`
-	InitialLastprocessedTag string      `mapstructure:"initialLastprocessedTag"`
+	InitialLastProcessedTag string      `mapstructure:"initialLastProcessedTag"`
 }
 
 type GitRepoAuth struct {
@@ -48,7 +48,7 @@ type Quorum struct {
 type Hooks struct {
 	OnCommandSuccess *[]string `mapstructure:"onCommandSuccess,omitempty"`
 	OnCommandFailure *[]string `mapstructure:"onCommandFailure,omitempty"`
-	OnCommandSkiped  *[]string `mapstructure:"onCommandSkipped,omitempty"`
+	OnCommandSkipped *[]string `mapstructure:"onCommandSkipped,omitempty"`
 	OnQuorumFailure  *[]string `mapstructure:"onQuorumFailure,omitempty"`
 	OnCommandStarted *[]string `mapstructure:"onCommandStarted,omitempty"`
 }

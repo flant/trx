@@ -15,8 +15,8 @@ import (
 )
 
 type Storage interface {
-	CheckLastSuccessedTag() (string, error)
-	StoreSuccessedTag(commit string) error
+	CheckLastSucceedTag() (string, error)
+	StoreSucceedTag(commit string) error
 }
 
 var configPath string
@@ -56,13 +56,13 @@ func run() error {
 		return fmt.Errorf("config error: %w", err)
 	}
 
-	t, err := getGitTargerObject(&cfg.Repo)
+	t, err := getGitTargetObject(&cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("git error: %w", err)
 	}
 
-	var storage Storage = storage.NewLocalStorage(cfg.Repo.Url)
-	lastSuccessedTag, err := storage.CheckLastSuccessedTag()
+	var s Storage = storage.NewLocalStorage(cfg.Repo.Url)
+	lastSucceedTag, err := s.CheckLastSucceedTag()
 	if err != nil {
 		return fmt.Errorf("check last published commit error: %w", err)
 	}
@@ -72,7 +72,7 @@ func run() error {
 		return fmt.Errorf("command executor error: %w", err)
 	}
 
-	isNewVersion, err := git.IsNewerVersion(t.Tag, lastSuccessedTag, cfg.Repo.InitialLastprocessedTag)
+	isNewVersion, err := git.IsNewerVersion(t.Tag, lastSucceedTag, cfg.Repo.InitialLastProcessedTag)
 	if err != nil {
 		return fmt.Errorf("can't check if tag is new: %w", err)
 	}
@@ -91,7 +91,7 @@ func run() error {
 
 	err = quorum.CheckQuorums(cfg.Quorums, t.Repository, t.Tag)
 	if err != nil {
-		var qErr *quorum.QuorumError
+		var qErr *quorum.Error
 		if errors.As(err, &qErr) {
 			executor.Vars["FailedQuorumName"] = qErr.QuorumName
 			if hookErr := executor.RunOnQuorumFailedHook(cfg); hookErr != nil {
@@ -132,7 +132,7 @@ func run() error {
 		return fmt.Errorf("run command error: %w", err)
 	}
 
-	if err := storage.StoreSuccessedTag(t.Tag); err != nil {
+	if err := s.StoreSucceedTag(t.Tag); err != nil {
 		return fmt.Errorf("store last successed tag error: %w", err)
 	}
 
@@ -144,7 +144,7 @@ func run() error {
 	return nil
 }
 
-func getGitTargerObject(cfg *config.GitRepo) (*git.TargetGitObject, error) {
+func getGitTargetObject(cfg *config.GitRepo) (*git.TargetGitObject, error) {
 	t, err := git.GetTargetGitObject(*cfg)
 	if err != nil {
 		return nil, fmt.Errorf("get target git object error: %w", err)
