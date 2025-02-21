@@ -9,7 +9,8 @@ import (
 )
 
 type RunnerConfig struct {
-	Commands []string `mapstructure:"commands"`
+	Commands []string          `mapstructure:"commands"`
+	Env      map[string]string `mapstructure:"env"`
 }
 
 func NewRunnerConfig(wd, configPath string) (*RunnerConfig, error) {
@@ -28,7 +29,7 @@ func NewRunnerConfig(wd, configPath string) (*RunnerConfig, error) {
 }
 
 func _defaultRunner(wd string) {
-	viper.SetConfigName("trx-cfg")
+	viper.SetConfigName("trx")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(wd)
 }

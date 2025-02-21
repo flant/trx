@@ -155,6 +155,8 @@ Ensure that you specify the path relative to your repository location.
 
 ```yaml
 #trx-cfg.yaml
+env:
+  TEST: test
 commands:
   - echo "$TEST" | base64
   - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"

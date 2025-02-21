@@ -104,11 +104,12 @@ func run() error {
 	if len(cfg.Commands) > 0 {
 		cmdsToRun = cfg.Commands
 	} else {
-		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.CommandsFilePath)
+		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.Repo.ConfigFile)
 		if err != nil {
 			return fmt.Errorf("config error: %w", err)
 		}
 		cmdsToRun = runCfg.Commands
+		executor.Env = mergeEnvs(cfg.Env, runCfg.Env)
 	}
 
 	if len(cmdsToRun) == 0 {
@@ -161,4 +162,15 @@ func generateCmdVars(cfg *config.Config, t *git.TargetGitObject) map[string]stri
 	vars["RepoUrl"] = cfg.Repo.Url
 	vars["RepoCommit"] = t.Commit
 	return vars
+}
+
+func mergeEnvs(envs map[string]string, cfgEnv map[string]string) []string {
+	for k, v := range cfgEnv {
+		envs[k] = v
+	}
+	newEnv := make([]string, 0, len(envs))
+	for k, v := range envs {
+		newEnv = append(newEnv, fmt.Sprintf("%s=%s", k, v))
+	}
+	return newEnv
 }

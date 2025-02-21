@@ -17,7 +17,6 @@ type Config struct {
 
 	Hooks             *Hooks   `mapstructure:"hooks,omitempty"`
 	InitLastPublished string   `mapstructure:"initial_last_published_git_commit"`
-	CommandsFilePath  string   `mapstructure:"commandsFilePath"`
 	Commands          []string `mapstructure:"commands"`
 }
 
@@ -25,6 +24,7 @@ type GitRepo struct {
 	Url                     string      `mapstructure:"url" validate:"required"`
 	Auth                    GitRepoAuth `mapstructure:"auth"`
 	InitialLastProcessedTag string      `mapstructure:"initialLastProcessedTag"`
+	ConfigFile              string      `mapstructure:"configFile"`
 }
 
 type GitRepoAuth struct {

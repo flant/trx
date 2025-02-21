@@ -50,11 +50,10 @@ func (e *Executor) Exec(commands []string) error {
 	if err != nil {
 		return fmt.Errorf("can't resolve envs: %w", err)
 	}
-	for _, c := range cmds {
-		err := execute(c, envs, e.WorkDir)
-		if err != nil {
-			return fmt.Errorf("error execute command %s: %w", c, err)
-		}
+	script := strings.Join(cmds, " && ")
+	err = execute(script, envs, e.WorkDir)
+	if err != nil {
+		return fmt.Errorf("error execute command: %w", err)
 	}
 	return nil
 }
