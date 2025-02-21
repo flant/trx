@@ -14,4 +14,4 @@ tasks:
   build:
     desc: 'Build app'
     cmds:
-      - go build -o bin/trx cmd/trx/main.go  
+      - go build -o bin/trx ./cmd/trx
