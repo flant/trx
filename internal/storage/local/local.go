@@ -10,12 +10,15 @@ import (
 	"trx/internal/git"
 )
 
+const TypeLocalStorage = "local"
+
 const (
 	fileLastProcessedCommit = "last_processed_commit"
 )
 
 type Local struct {
-	path string
+	path     string
+	lockFile *os.File
 }
 
 func NewLocalStorage(repoUrl string) *Local {
