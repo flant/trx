@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"trx/internal/config"
 	"trx/internal/lock"
 	"trx/internal/storage"
@@ -22,6 +23,9 @@ func forceUnlockCmd() *cobra.Command {
 }
 
 func removeLock() error {
+	log.SetFlags(0)
+	log.SetOutput(os.Stdout)
+	log.Println("Removing trx lock")
 	cfg, err := config.NewConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"time"
 	"trx/internal/command"
 	"trx/internal/config"
@@ -15,6 +16,7 @@ import (
 
 func run() error {
 	log.SetFlags(0)
+	log.SetOutput(os.Stdout)
 	log.Println("Running trx")
 	log.Printf("Start at %s\n", time.Now().Format("2006-01-02 15:04:05"))
 
