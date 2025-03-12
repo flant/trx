@@ -109,14 +109,14 @@ repo:
   # Optional, default is `trx.yaml` in the repository.
   configFile: "trx.yaml"
 
-  # Commands defined here have a higher priority than those specified in `trx.yaml`.
+  # Optional. Commands defined here have a higher priority than those specified in `trx.yaml`.
   commands:
     - werf converge
     - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
 
-  # Set environment variables here to be used in the commands.
-  # Environment variables defined here are merged with those in `trx.yaml`,
-  # but have higher priority (values in this section will override those in `trx.yaml`).
+  # Optional. Set environment variables here to be used in the commands.
+  # Environment variables defined here are merged with those in the configFile,
+  # but have higher priority (values in this section will override those in the configFile).
   env:
     WERF_ENV: "production"
 
@@ -136,7 +136,7 @@ quorums:
         ...
         -----END PGP PUBLIC KEY BLOCK-----
 
-# Define actions to be taken at different stages of command execution.
+# Optional. Define actions to be taken at different stages of command execution.
 hooks:
   onCommandStarted:
     - "echo 'Command started: {{ .RepoTag }} at {{ .RepoCommit }}'"
