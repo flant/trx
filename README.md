@@ -1,157 +1,89 @@
-# trx  
+# trx
 
-"trx" helps you release versions approved by team members in restricted environments if a quorum is reached.  
-A quorum is considered reached if the required number of GPG signatures is present on the tag.  
+**trx** allows executing commands using the software’s source code version (Git tag) verified by a quorum of trusted users. This guarantees that only approved versions of the code are used for operations, like deploying an application or running other critical tasks.
 
-## Table of Contents  
-- [For Administrators](#for-administrators)  
-  - [Project Configuration](#project-configuration)  
-  - [Creating a Configuration File](#creating-a-configuration-file)  
-  - [Configuring Commands](#configuring-commands)  
-  - [Running the Application](#running-the-application)  
-- [For Developers](#for-developers)  
-  - [GPG Key Requirements](#gpg-key-requirements)  
-  - [Generating a GPG Key](#generating-a-gpg-key)  
-  - [Installing the Signatures Plugin](#installing-the-signatures-plugin)  
-  - [Adding a Signature to a Tag](#adding-a-signature-to-a-tag)  
-- [Configuration Example](#configuration-example)  
+## Table of contents
 
----
+* [For a developer](#for-a-developer)
+  * [Setting up a GPG signature](#setting-up-a-gpg-signature)
+    * [GPG key requirements](#gpg-key-requirements)
+    * [Generating a GPG Key](#generating-a-gpg-key)
+    * [Installing the signatures plugin](#installing-the-signatures-plugin)
+  * [Adding a signature to a tag](#adding-a-signature-to-a-tag)
+  * [Configuring commands (optional)](#configuring-commands-optional)
+* [For a user](#for-a-user)
+  * [Creating a configuration file](#creating-a-configuration-file)
+  * [Installing trx](#installing-trx)
+  * [Running](#running)
 
-## For Administrators  
+## For a developer
 
-### Project Configuration  
+### Setting up a GPG signature
 
-To begin, clone the repository to your server:  
-```sh
-git clone https://fox.flant.com/deckhouse/delivery/yet-another-trdl.git
-cd yet-another-trdl
-```
+#### GPG key requirements
 
-Ensure you have Go installed (version 1.23 or later). Then, build the binary:  
-```sh
-cd cmd/trx
-go build -o bin/trx ./cmd/trx
-```
+- Only RSA encryption is supported for now.
+- Ensure keys are stored securely (e.g., in `~/.gnupg`).
+- Private keys must be encrypted with a password.
+- Public keys must be provided to the administrator.
 
-This will generate an executable file named `trx`.  
-Now set up the configuration and use it based on your scenario (run manually, schedule in cron, integrate into CI, etc.).  
+#### Generating a GPG Key
 
-If you are familiar with `go-task`, check `Taskfile.dist.yaml` for common actions.  
-Learn more about `task`: [taskfile.dev](https://taskfile.dev/).  
+Use the following command to generate an RSA4096 GPG key:
 
-### Creating a Configuration File  
-
-- Configure the target repository:  
-```yaml
-repo:
-  url: "https://github.com/werf/werf.git"
-  
-  # Optional, required if the repository needs authentication.
-  # auth:
-```
-
-- Configure quorums:  
-```yaml
-quorums:
-  - name: main
-    minNumberOfKeys: 1  
-    gpgKeyPaths:
-      - public.asc
-```
-
-### Configuring Commands  
-
-Commands should be stored in `trx.yaml` inside your project's Git repository.  
-There is also an option to define `commands` in the main `trx.yaml`, but this is recommended only for debugging purposes.  
-If `commands` are specified in the main `trx.yaml`, commands from the repository will be ignored and vice versa.  
-
-Example:  
-```yaml
-commands:
-  - echo "$TEST" | base64
-  - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
-env:
-  TEST: "Test"
-  COMMIT: "{{ .RepoCommit }}"
-```
-Available template variables:  
-- `{{ .RepoTag }}` – current tag  
-- `{{ .RepoCommit }}` – current commit  
-- `{{ .RepoUrl }}` – repository URL  
-
-- Optionally configure `hooks`.  
-See the [configuration example](#configuration-example) for details.  
-
-### Running the Application  
-
-The config file can be specified using the `--config` flag or the default path `./trx.yaml`.  
-See the [configuration example](#configuration-example) to create a config file.  
-```sh
-./trx --config trx.yaml
-```
-To force execution even if no new version is found:  
-```sh
-./trx --force
-```
-
----
-
-## For Developers  
-
-### GPG Key Requirements  
-
-- **Only RSA encryption is supported for now.**  
-- **Store keys in a secure location** (e.g., `~/.gnupg`).  
-- **Private keys must be encrypted with a password.**  
-- **Public keys must be provided to the administrator.**  
-
-### Generating a GPG Key  
-
-Generate a new key:  
 ```sh
 gpg --default-new-key-algo rsa4096 --gen-key
 ```
-List existing keys:  
-```sh
-gpg --list-secret-keys --keyid-format=long
-```
-Export a public key:  
-```sh
-gpg --armor --export KEY_ID > public_key.asc
-```
 
-### Installing the Signatures Plugin  
+#### Installing the signatures plugin
+
+Install the signatures plugin with:
 
 ```sh
 git clone https://github.com/werf/third-party-git-signatures.git
 cd third-party-git-signatures
 make install
 ```
-Refer to the [official repository](https://github.com/werf/3p-git-signatures) for additional details.  
 
-### Adding a Signature to a Tag  
+Refer to the [official repository](https://github.com/werf/3p-git-signatures) for additional details.
 
-After a tag is published:  
+### Adding a signature to a tag
 
-- For the initial configuration, sign the first tag:  
-```sh
-git signatures add --push v0.0.1
-```
-- For all other cases:  
+After a tag is published, use the following commands:
+
 ```sh
 git fetch --tags
 git signatures pull
 git signatures add --push v0.0.1
 ```
 
----
+> On first use in the Git repository, run `git signatures add --push v0.0.1`.
 
-## Configuration Example  
+### Configuring commands (optional)
 
-**trx.yaml:** 
+The `trx.yaml` file inside the project repository defines commands and environment variables, which users can override.
+
+Example:
 
 ```yaml
+commands:
+  - werf converge
+  - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
+env:
+  WERF_ENV: "production"
+```
+
+Available template variables:
+- `{{ .RepoTag }}` – current tag.
+- `{{ .RepoCommit }}` – current commit.
+- `{{ .RepoUrl }}` – repository URL.
+
+## For a user
+
+### Creating a configuration file
+
+```yaml
+# trx.yaml
 repo:
   url: "https://github.com/werf/werf.git"
   
@@ -165,7 +97,18 @@ repo:
 
   # Optional, default is `trx.yaml` in the repository.
   configFile: "trx.yaml"
-  
+
+  # Commands defined here have a higher priority than those specified in `trx.yaml`.
+  commands:
+    - werf converge
+    - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
+
+  # Set environment variables here to be used in the commands.
+  # Environment variables defined here are merged with those in `trx.yaml`,
+  # but have higher priority (values in this section will override those in `trx.yaml`).
+  env:
+    WERF_ENV: "production"
+
   # Optional. Ensures processing starts from a specific tag and prevents processing older tags (safeguard against freeze attacks).
   initialLastProcessedTag: "v0.10.1"
 
@@ -182,11 +125,9 @@ quorums:
         ...
         -----END PGP PUBLIC KEY BLOCK-----
 
-env:
-  TEST: "True"
-
+# Define actions to be taken at different stages of command execution.
 hooks:
-  onCommandStarted: # Async invocation
+  onCommandStarted:
     - "echo 'Command started: {{ .RepoTag }} at {{ .RepoCommit }}'"
   onCommandSuccess:
     - "echo 'Success: {{ .RepoTag }}'"
@@ -198,13 +139,34 @@ hooks:
     - "echo 'Quorum {{ .FailedQuorumName }} failed'"
 ```
 
-**Commands file:**  
-```yaml 
-#trx.yaml
-commands:
-  - echo "$TEST" | base64
-  - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
-env:
-  TEST: "True"
-  COMMIT: "{{ .RepoCommit }}"
+### Installing trx
+
+Clone the repository:
+
+```sh
+git clone https://fox.flant.com/deckhouse/delivery/trx.git
+cd trx
+```
+
+Ensure that you have Go (version 1.23 or later) installed on your system.
+
+Build the binary:
+
+```sh
+cd cmd/trx
+go build -o bin/trx ./cmd/trx
+```
+
+### Running
+
+The config file can be specified using the `--config` flag or the default path `./trx.yaml`.
+
+```sh
+trx --config trx.yaml
+```
+
+To force the execution even if no new version is detected, use the `--force` flag:
+
+```sh
+trx --force
 ```
