@@ -1,5 +1,3 @@
-# trx
-
 **trx** allows executing commands using the software’s source code version (Git tag) verified by a quorum of trusted users. This guarantees that only approved versions of the code are used for operations, like deploying an application or running other critical tasks.
 
 ## Table of contents
