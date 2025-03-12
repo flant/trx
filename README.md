@@ -2,6 +2,7 @@
 
 ## Table of contents
 
+* [Overview](#overview)
 * [For a developer](#for-a-developer)
   * [Setting up a GPG signature](#setting-up-a-gpg-signature)
     * [GPG key requirements](#gpg-key-requirements)
@@ -13,6 +14,18 @@
   * [Creating a configuration file](#creating-a-configuration-file)
   * [Installing trx](#installing-trx)
   * [Running](#running)
+
+## Overview
+
+The development team releases software versions (Git tags in [SemVer format](https://semver.org/)) and signs them using GPG signatures. Along with the code, developers can provide default commands that users can execute.
+
+End users create a project configuration specifying repository access credentials and trusted GPG key groups. The trx utility then:
+
+1.	Fetches the latest available software version (highest [SemVer](https://semver.org/)).
+2.	Verifies the required signatures.
+3.	Executes commands in the repository root.
+
+Commands can be provided alongside the source code by developers and/or parameterized and defined by the user.
 
 ## For a developer
 
