@@ -176,6 +176,11 @@ The config file can be specified using the `--config` flag or the default path `
 trx --config trx.yaml
 ```
 
+Also you can execute command from the command line:
+```sh
+trx --config trx.yaml -- ls -la
+```
+
 To force the execution even if no new version is detected, use the `--force` flag:
 
 ```sh

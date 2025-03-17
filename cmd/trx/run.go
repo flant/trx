@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 	"trx/internal/command"
 	"trx/internal/config"
@@ -14,7 +15,7 @@ import (
 	"trx/internal/storage"
 )
 
-func run() error {
+func run(opts runOptions) error {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 	log.Println("Running trx")
@@ -107,20 +108,9 @@ func run() error {
 		}
 	}
 
-	var cmdsToRun []string
-	if len(cfg.Commands) > 0 {
-		cmdsToRun = cfg.Commands
-	} else {
-		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.Repo.ConfigFile)
-		if err != nil {
-			return fmt.Errorf("config error: %w", err)
-		}
-		cmdsToRun = runCfg.Commands
-		executor.Env = mergeEnvs(cfg.Env, runCfg.Env)
-	}
-
-	if len(cmdsToRun) == 0 {
-		return fmt.Errorf("no commands to run: %w", err)
+	cmdsToRun, err := getCmdsToRun(cfg, opts, executor)
+	if err != nil {
+		return fmt.Errorf("get commands to run error: %w", err)
 	}
 
 	go func() {
@@ -166,4 +156,29 @@ func mergeEnvs(envs map[string]string, cfgEnv map[string]string) []string {
 		newEnv = append(newEnv, fmt.Sprintf("%s=%s", k, v))
 	}
 	return newEnv
+}
+
+func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executor) ([]string, error) {
+	var cmdsToRun []string
+	if len(opts.cmdFromCli) > 0 {
+		cmdsToRun = []string{strings.Join(opts.cmdFromCli, " ")}
+		return cmdsToRun, nil
+	}
+
+	if len(cfg.Commands) > 0 {
+		cmdsToRun = cfg.Commands
+	} else {
+		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.Repo.ConfigFile)
+		if err != nil {
+			return nil, fmt.Errorf("config error: %w", err)
+		}
+		cmdsToRun = runCfg.Commands
+		executor.Env = mergeEnvs(cfg.Env, runCfg.Env)
+	}
+
+	if len(cmdsToRun) == 0 {
+		return nil, fmt.Errorf("no commands to run")
+	}
+
+	return cmdsToRun, nil
 }
