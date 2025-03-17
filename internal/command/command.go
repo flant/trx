@@ -3,6 +3,7 @@ package command
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"html/template"
 	"io"
@@ -20,12 +21,13 @@ type Vars struct {
 }
 
 type Executor struct {
+	Ctx     context.Context
 	WorkDir string
 	Env     []string
 	Vars    map[string]string
 }
 
-func NewExecutor(e map[string]string, vars map[string]string) (*Executor, error) {
+func NewExecutor(ctx context.Context, e map[string]string, vars map[string]string) (*Executor, error) {
 	wd := WorkDir
 	if wd == "" {
 		wd, _ = os.Getwd()
@@ -35,6 +37,7 @@ func NewExecutor(e map[string]string, vars map[string]string) (*Executor, error)
 		envs = append(envs, fmt.Sprintf("%s=%s", strings.ToUpper(k), v))
 	}
 	return &Executor{
+		Ctx:     ctx,
 		WorkDir: wd,
 		Env:     envs,
 		Vars:    vars,
@@ -51,9 +54,12 @@ func (e *Executor) Exec(commands []string) error {
 		return fmt.Errorf("can't resolve envs: %w", err)
 	}
 	script := "set -e\n" + strings.Join(cmds, "\n")
-	err = execute(script, envs, e.WorkDir)
-	if err != nil {
-		return fmt.Errorf("error execute command: %w", err)
+	if err := execute(e.Ctx, &excuteOpts{
+		cmd: script,
+		env: envs,
+		wd:  e.WorkDir,
+	}); err != nil {
+		return fmt.Errorf("executor error: %w", err)
 	}
 	return nil
 }
@@ -84,18 +90,28 @@ func resolveTemplate(tmpl string, vars map[string]string) (string, error) {
 	return buf.String(), nil
 }
 
-func execute(command string, env []string, wd string) error {
-	cmd := exec.Command("sh", "-c", command)
-	cmd.Dir = wd
-	cmd.Env = append(os.Environ(), env...)
+type excuteOpts struct {
+	cmd string
+	env []string
+	wd  string
+}
+
+func execute(ctx context.Context, opts *excuteOpts) error {
+	cmd := exec.CommandContext(ctx, "sh", "-c", opts.cmd)
+	cmd.Dir = opts.wd
+	cmd.Env = append(os.Environ(), opts.env...)
+
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+	defer stdoutPipe.Close()
+
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
+	defer stderrPipe.Close()
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting command: %w", err)
