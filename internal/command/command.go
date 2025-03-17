@@ -27,7 +27,7 @@ type Executor struct {
 	Vars    map[string]string
 }
 
-func NewExecutor(ctx context.Context, e map[string]string, vars map[string]string) (*Executor, error) {
+func NewExecutor(ctx context.Context, e, vars map[string]string) (*Executor, error) {
 	wd := WorkDir
 	if wd == "" {
 		wd, _ = os.Getwd()

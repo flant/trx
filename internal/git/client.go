@@ -8,14 +8,15 @@ import (
 	"os/user"
 	"path/filepath"
 	"sort"
-	"trx/internal/command"
-	"trx/internal/config"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"trx/internal/command"
+	"trx/internal/config"
 )
 
 type GitClient struct {
@@ -93,7 +94,7 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 	}
 
 	var versions []*semver.Version
-	var tagMap = make(map[string]plumbing.ReferenceName)
+	tagMap := make(map[string]plumbing.ReferenceName)
 
 	err = tagRefs.ForEach(func(ref *plumbing.Reference) error {
 		tagName := ref.Name().Short()

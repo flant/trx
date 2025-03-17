@@ -1,17 +1,207 @@
 version: "3"
 
+silent: true
+
+vars:
+  version: '{{.version | default "dev"}}'
+
 tasks:
+  deps:install:
+    desc: "Install all dependencies."
+    deps:
+      - deps:install:golangci-lint
+      - deps:install:gofumpt
+
+  deps:install:golangci-lint:
+    desc: "Install golangci-lint binary."
+    cmd: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin {{.golangcilintVersion | default "v1.60.2"}}
+
+  deps:install:gofumpt:
+    desc: "Install gofumpt binary."
+    cmd: go install mvdan.cc/gofumpt@v0.7.0
+
   lint:
-    desc: 'Lint with golangci-lint'
+    desc: "Run all linters"
     cmds:
-      - golangci-lint run
-    
+      - task: lint:golangci-lint
+      - task: lint:prettier
+
+  lint:golangci-lint:
+    desc: "Lint with golangci-lint"
+    cmd: golangci-lint run -v --timeout 5m --config .golangci.yaml ./...
+
+  lint:prettier:
+    desc: "Lint with prettier"
+    cmds:
+      - docker run --rm -v $(pwd):/work tmknom/prettier -c "**/*.yaml" "**/*.yml"
+
+  format:
+    desc: "Run all formatters"
+    deps:
+      - format:gci
+      - format:gofumpt
+      - format:prettier
+
+  format:gofumpt:
+    desc: 'Format code with gofumpt. Important vars: "paths".'
+    cmd: gofumpt -extra -w {{.CLI_ARGS}} {{.paths | default "cmd/ internal/"}}
+
+  format:gci:
+    desc: 'Format code with gci. Important vars: "paths".'
+    cmds:
+      - gci write -s Standard -s Default -s "Prefix(trx)" {{.paths | default "cmd/ internal/"}}
+
+  format:prettier:
+    desc: "Format yaml files with prettier."
+    cmds:
+      - docker run --rm -v $(pwd):/work tmknom/prettier -w "**/*.yaml" "**/*.yml"
+
   test:
-    desc: 'Run unit tests'
+    desc: "Run unit tests"
+    cmd: go test -v ./...
+
+  build:dev:
+    desc: "Build all trx dev binaries."
     cmds:
-      - go test -v ./...
- 
+      - task: build:dev:linux:amd64
+      - task: build:dev:linux:arm64
+      - task: build:dev:darwin:amd64
+      - task: build:dev:darwin:arm64
+      - task: build:dev:windows:amd64
+
+  build:dist:
+    desc: "Build all trx release binaries."
+    cmds:
+      - task: build:dist:linux:amd64
+      - task: build:dist:linux:arm64
+      - task: build:dist:darwin:amd64
+      - task: build:dist:darwin:arm64
+      - task: build:dist:windows:amd64
+
+  build:dev:linux:amd64:
+    desc: "Build trx dev binary for linux/amd64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "linux"
+          targetArch: "amd64"
+          outputDir: "{{.outputDir}}"
+
+  build:dev:linux:arm64:
+    desc: "Build trx dev binary for linux/arm64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "linux"
+          targetArch: "arm64"
+          outputDir: "{{.outputDir}}"
+
+  build:dev:darwin:amd64:
+    desc: "Build trx dev binary for darwin/amd64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "darwin"
+          targetArch: "amd64"
+          outputDir: "{{.outputDir}}"
+
+  build:dev:darwin:arm64:
+    desc: "Build trx dev binary for darwin/arm64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "darwin"
+          targetArch: "arm64"
+          outputDir: "{{.outputDir}}"
+
+  build:dev:windows:amd64:
+    desc: "Build trx dev binary for windows/amd64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "windows"
+          targetArch: "amd64"
+          outputDir: "{{.outputDir}}"
+
+  build:dist:linux:amd64:
+    desc: "Build trx release binary for linux/amd64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "linux"
+          targetArch: "amd64"
+          outputDir: "dist/{{.version}}/linux-amd64/bin/"
+
+  build:dist:linux:arm64:
+    desc: "Build trx release binary for linux/arm64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "linux"
+          targetArch: "arm64"
+          outputDir: "dist/{{.version}}/linux-arm64/bin/"
+
+  build:dist:darwin:amd64:
+    desc: "Build trx release binary for darwin/amd64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "darwin"
+          targetArch: "amd64"
+          outputDir: "dist/{{.version}}/darwin-amd64/bin/"
+
+  build:dist:darwin:arm64:
+    desc: "Build trx release binary for darwin/arm64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "darwin"
+          targetArch: "arm64"
+          outputDir: "dist/{{.version}}/darwin-arm64/bin/"
+
+  build:dist:windows:amd64:
+    desc: "Build trx release binary for windows/amd64."
+    cmds:
+      - task: _build:go
+        vars:
+          targetOS: "windows"
+          targetArch: "amd64"
+          outputDir: "dist/{{.version}}/windows-amd64/bin/"
+
+  _build:go:
+    internal: true
+    cmds:
+      - |
+        go build -o {{.outputDir | default (printf "bin/%s/%s-%s" .version .targetOS .targetArch)}}/trx{{if (eq .targetOS "windows")}}.exe{{end}} \
+        {{.extraGoBuildArgs}} {{.CLI_ARGS}} ./cmd/trx
+    env:
+      GOOS: "{{.targetOS}}"
+      GOARCH: "{{.targetArch}}"
+      CGO_ENABLED: 0
+
   build:
-    desc: 'Build app'
+    desc: "Build trx dev binary."
+    run: once
     cmds:
-      - go build -o bin/trx ./cmd/trx
+      - task: build:dev:{{OS}}:{{ARCH}}
+        vars:
+          outputDir: '{{.outputDir | default "./bin"}}'
+          extraGoBuildArgs: "{{.extraGoBuildArgs}}"
+
+  _image:build:
+    cmds:
+      - docker build {{.CLI_ARGS}} --platform=linux/amd64 -f "{{.dfilePath}}" -t "{{.imageName}}" "{{.context | default "."}}"
+
+  image:build:builder:
+    desc: 'Build werf builder image. Important vars: "imageName".'
+    cmds:
+      - task: _image:build
+        vars:
+          dfilePath: Dockerfile
+          imageName:
+            sh: "echo registry-write.werf.io/trx/builder:$(git rev-parse HEAD)"
+
+  verify:dist:binaries:
+    desc: "Verify that the distributable binaries are built and have correct platform/arch."
+    cmds:
+      - ./scripts/verify-dist-binaries.sh {{.version}}

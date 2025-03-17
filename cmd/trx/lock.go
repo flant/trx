@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/spf13/cobra"
+
 	"trx/internal/config"
 	"trx/internal/lock"
 	"trx/internal/storage"
-
-	"github.com/spf13/cobra"
 )
 
 func forceUnlockCmd() *cobra.Command {

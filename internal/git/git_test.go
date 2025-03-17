@@ -13,7 +13,6 @@ type testVer struct {
 }
 
 func TestCheckNewVersion_happyPath(t *testing.T) {
-
 	tcs := []testVer{
 		{
 			current: "v0.0.0",
@@ -50,7 +49,6 @@ func TestCheckNewVersion_happyPath(t *testing.T) {
 }
 
 func TestCheckNewVersion_unhappyPath(t *testing.T) {
-
 	tcs := []testVer{
 		{
 			current: "v0.0.0",

@@ -28,7 +28,8 @@ func (e *ErrLocked) Error() string {
 func NewLocker(storage Storage, lockingDisbaled bool) *Locker {
 	return &Locker{
 		storage:         storage,
-		lockingDisbaled: lockingDisbaled}
+		lockingDisbaled: lockingDisbaled,
+	}
 }
 
 func (l *Locker) CheckLock() error {

@@ -34,7 +34,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.SilenceUsage = true
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "./trx.yaml", "Path to config file")
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Force execution if no new version found")
-	rootCmd.Flags().BoolVarP(&disableLock, "disable-lock", "", false, "Disbale execution locking")
+	rootCmd.Flags().BoolVarP(&disableLock, "disable-lock", "", false, "Disable execution locking")
 
 	rootCmd.AddCommand(forceUnlockCmd())
 

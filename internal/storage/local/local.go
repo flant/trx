@@ -7,6 +7,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+
 	"trx/internal/git"
 )
 
@@ -53,11 +54,11 @@ func (s *Local) StoreSucceedTag(commit string) error {
 		return fmt.Errorf("tag can't be empty")
 	}
 
-	if err := os.MkdirAll(s.path, 0755); err != nil {
+	if err := os.MkdirAll(s.path, 0o755); err != nil {
 		return err
 	}
 
 	filePath := filepath.Join(s.path, fileLastProcessedCommit)
 
-	return os.WriteFile(filePath, []byte(commit+"\n"), 0644)
+	return os.WriteFile(filePath, []byte(commit+"\n"), 0o644)
 }

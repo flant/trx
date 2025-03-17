@@ -1,0 +1,59 @@
+name: release:release-please
+on:
+  push:
+    branches:
+      - "main"
+      - "[0-9]+.[0-9]+.[0-9]+*"
+      - "[0-9]+.[0-9]+"
+      - "[0-9]+"
+  repository_dispatch:
+    types: ["release:release-please"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release-please:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Extract branch name
+        run: echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_OUTPUT
+        id: extract_branch
+
+      - name: Release
+        uses: werf/third-party-release-please-action@werf
+        with:
+          default-branch: ${{ steps.extract_branch.outputs.branch }}
+          release-type: go
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          release-notes-header: "## Changelog"
+          release-notes-footer: |
+            ## Installation
+
+            Download `trx` binaries from here:
+            * [Linux amd64](https://storage.googleapis.com/trx-tuf/targets/releases/{{> version }}/linux-amd64/bin/trx) ([PGP signature](https://storage.googleapis.com/trx-tuf/targets/signatures/{{> version }}/linux-amd64/bin/trx.sig))
+            * [Linux arm64](https://storage.googleapis.com/trx-tuf/targets/releases/{{> version }}/linux-arm64/bin/trx) ([PGP signature](https://storage.googleapis.com/trx-tuf/targets/signatures/{{> version }}/linux-arm64/bin/trx.sig))
+            * [macOS amd64](https://storage.googleapis.com/trx-tuf/targets/releases/{{> version }}/darwin-amd64/bin/trx) ([PGP signature](https://storage.googleapis.com/trx-tuf/targets/signatures/{{> version }}/darwin-amd64/bin/trx.sig))
+            * [macOS arm64](https://storage.googleapis.com/trx-tuf/targets/releases/{{> version }}/darwin-arm64/bin/trx) ([PGP signature](https://storage.googleapis.com/trx-tuf/targets/signatures/{{> version }}/darwin-arm64/bin/trx.sig))
+            * [Windows amd64](https://storage.googleapis.com/trx-tuf/targets/releases/{{> version }}/windows-amd64/bin/trx.exe) ([PGP signature](https://storage.googleapis.com/trx-tuf/targets/signatures/{{> version }}/windows-amd64/bin/trx.exe.sig))
+              
+            These binaries were signed with PGP and could be verified with [this PGP public key](https://raw.githubusercontent.com/flant/trx/refs/heads/main/trx.asc).
+
+            For example, `trx` binary can be downloaded, verified with `gpg` and then installed to `~/bin/` on Linux with these commands:
+            ```shell
+            curl -sSLO "https://storage.googleapis.com/trx-tuf/targets/releases/{{> version }}/linux-amd64/bin/trx" -O "https://storage.googleapis.com/trx-tuf/targets/signatures/{{> version }}/linux-amd64/bin/trx.sig"
+            curl -sSL https://raw.githubusercontent.com/flant/trx/refs/heads/main/trx.asc | gpg --import
+            gpg --verify trx.sig trx
+            install -D trx ~/bin/trx
+            ```
+
+  notify:
+    if: failure()
+    needs: release-please
+    uses: werf/common-ci/.github/workflows/notification.yml@main
+    secrets:
+      loopNotificationGroup: ${{ secrets.LOOP_NOTIFICATION_GROUP }}
+      webhook: ${{ secrets.LOOP_NOTIFICATION_WEBHOOK }}
+      notificationChannel: ${{ secrets.LOOP_NOTIFICATION_CHANNEL }}

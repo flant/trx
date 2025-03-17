@@ -3,11 +3,12 @@ package git
 import (
 	"fmt"
 	"os"
-	"trx/internal/config"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+
+	"trx/internal/config"
 )
 
 type RepoConfig struct {

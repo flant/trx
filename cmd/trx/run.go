@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
 	"trx/internal/command"
 	"trx/internal/config"
 	"trx/internal/git"
@@ -159,7 +160,7 @@ func generateCmdVars(cfg *config.Config, t *git.TargetGitObject) map[string]stri
 	return vars
 }
 
-func mergeEnvs(envs map[string]string, cfgEnv map[string]string) []string {
+func mergeEnvs(envs, cfgEnv map[string]string) []string {
 	for k, v := range cfgEnv {
 		envs[k] = v
 	}

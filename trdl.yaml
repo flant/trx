@@ -1,0 +1,5 @@
+docker_image: registry-write.werf.io/trx/builder:29fec0a40d0236b70d9f974a4ffa9feab063525c@sha256:a197644941c7597b6ceddcc7037db52bf8db8a65a9c2207063b5e07815670d66
+commands:
+  - task build:dist version={{ .Tag }}
+  - task verify:dist:binaries version={{ .Tag }}
+  - cp -a ./dist/{{ .Tag }}/* /result

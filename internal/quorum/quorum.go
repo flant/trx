@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"trx/internal/config"
-	trdlGit "trx/internal/git"
 
 	"github.com/go-git/go-git/v5"
 	"golang.org/x/sync/errgroup"
+
+	"trx/internal/config"
+	trdlGit "trx/internal/git"
 )
 
 type Error struct {
