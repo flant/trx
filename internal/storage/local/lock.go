@@ -8,6 +8,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"time"
+
 	"trx/internal/lock"
 )
 
@@ -83,11 +84,11 @@ func createLockFile(path string) (*os.File, error) {
 		return nil, fmt.Errorf("failed to marshal lock info: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create lock file directory: %w", err)
 	}
 
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create lock file: %w", err)
 	}

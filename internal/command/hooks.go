@@ -2,6 +2,7 @@ package command
 
 import (
 	"log"
+
 	"trx/internal/config"
 )
 

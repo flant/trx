@@ -8,9 +8,6 @@ linters:
     - gocyclo
     - goimports
     - misspell
-  disable:
-    - deadcode
-    - varcheck
 
 linters-settings:
   misspell:

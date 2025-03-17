@@ -88,8 +88,8 @@ func (config *Config) Validate() error {
 }
 
 func validateGitRepoPath(repo GitRepo) error {
-	var sshGitRegex = regexp.MustCompile(`^git@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:[a-zA-Z0-9-_/]+\.git)$`)
-	var httpsGitRegex = regexp.MustCompile(`^https?://(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?\.git$`)
+	sshGitRegex := regexp.MustCompile(`^git@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:[a-zA-Z0-9-_/]+\.git)$`)
+	httpsGitRegex := regexp.MustCompile(`^https?://(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?\.git$`)
 
 	switch {
 	case sshGitRegex.MatchString(repo.Url):
