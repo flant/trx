@@ -33,7 +33,7 @@ func CheckQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 			if err != nil {
 				return &Error{QuorumName: *q.Name, Err: fmt.Errorf("quorum `%s` error reading GPG keys: %w", *q.Name, err)}
 			}
-			err = trdlGit.Verify(repo, trdlGit.VerifyTagSignaturesRequest{
+			err = trdlGit.VerifyTagSignatures(repo, trdlGit.VerifyTagSignaturesRequest{
 				Tag:          tag,
 				NumberOfKeys: q.MinNumberOfKeys,
 				GPGKeys:      keys,
