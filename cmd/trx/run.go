@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 	"trx/internal/command"
 	"trx/internal/config"
@@ -20,6 +23,17 @@ func run(opts runOptions) error {
 	log.SetOutput(os.Stdout)
 	log.Println("Running trx")
 	log.Printf("Start at %s\n", time.Now().Format("2006-01-02 15:04:05"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-signalChan
+		log.Printf("Received signal: %s", sig)
+		cancel()
+	}()
 
 	cfg, err := config.NewConfig(configPath)
 	if err != nil {
@@ -72,7 +86,7 @@ func run(opts runOptions) error {
 		return fmt.Errorf("check last published commit error: %w", err)
 	}
 
-	executor, err := command.NewExecutor(cfg.Env, generateCmdVars(cfg, gitTargetObject))
+	executor, err := command.NewExecutor(ctx, cfg.Env, generateCmdVars(cfg, gitTargetObject))
 	if err != nil {
 		return fmt.Errorf("command executor error: %w", err)
 	}
@@ -113,10 +127,11 @@ func run(opts runOptions) error {
 		return fmt.Errorf("get commands to run error: %w", err)
 	}
 
+	// TODO: do proper handling of hook errors
 	go func() {
 		log.Println("Running onCommandStarted hook")
 		if hookErr := executor.RunOnCommandStartedHook(cfg); hookErr != nil {
-			log.Println("WARNING onCommandStarted hook execution error: %w", hookErr)
+			log.Printf("WARNING onCommandStarted hook execution error: %s", hookErr.Error())
 		}
 	}()
 
