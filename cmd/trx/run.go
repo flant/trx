@@ -56,9 +56,14 @@ func run() error {
 		}()
 	}
 
-	t, err := getGitTargetObject(&cfg.Repo)
+	gitClient, err := git.NewGitClient(cfg.Repo)
 	if err != nil {
-		return fmt.Errorf("git error: %w", err)
+		return fmt.Errorf("new git client error: %w", err)
+	}
+
+	gitTargetObject, err := gitClient.GetTargetGitObject()
+	if err != nil {
+		return fmt.Errorf("get target git object error: %w", err)
 	}
 
 	lastSucceedTag, err := storage.CheckLastSucceedTag()
@@ -66,12 +71,12 @@ func run() error {
 		return fmt.Errorf("check last published commit error: %w", err)
 	}
 
-	executor, err := command.NewExecutor(cfg.Env, generateCmdVars(cfg, t))
+	executor, err := command.NewExecutor(cfg.Env, generateCmdVars(cfg, gitTargetObject))
 	if err != nil {
 		return fmt.Errorf("command executor error: %w", err)
 	}
 
-	isNewVersion, err := git.IsNewerVersion(t.Tag, lastSucceedTag, cfg.Repo.InitialLastProcessedTag)
+	isNewVersion, err := git.IsNewerVersion(gitTargetObject.Tag, lastSucceedTag, cfg.Repo.InitialLastProcessedTag)
 	if err != nil {
 		return fmt.Errorf("can't check if tag is new: %w", err)
 	}
@@ -88,7 +93,7 @@ func run() error {
 		}
 	}
 
-	err = quorum.CheckQuorums(cfg.Quorums, t.Repository, t.Tag)
+	err = quorum.CheckQuorums(cfg.Quorums, gitClient.Repo, gitTargetObject.Tag)
 	if err != nil {
 		var qErr *quorum.Error
 		if errors.As(err, &qErr) {
@@ -132,7 +137,7 @@ func run() error {
 		return fmt.Errorf("run command error: %w", err)
 	}
 
-	if err := storage.StoreSucceedTag(t.Tag); err != nil {
+	if err := storage.StoreSucceedTag(gitTargetObject.Tag); err != nil {
 		return fmt.Errorf("store last successed tag error: %w", err)
 	}
 
@@ -142,20 +147,6 @@ func run() error {
 
 	log.Println("All done")
 	return nil
-}
-
-func getGitTargetObject(cfg *config.GitRepo) (*git.TargetGitObject, error) {
-	t, err := git.GetTargetGitObject(*cfg)
-	if err != nil {
-		return nil, fmt.Errorf("get target git object error: %w", err)
-	}
-
-	err = git.PerformCheckout(t.Repository, t.Tag)
-	if err != nil {
-		return nil, fmt.Errorf("checkout error: %w", err)
-	}
-
-	return t, nil
 }
 
 func generateCmdVars(cfg *config.Config, t *git.TargetGitObject) map[string]string {
