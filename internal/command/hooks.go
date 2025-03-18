@@ -7,6 +7,7 @@ import (
 
 func (e *Executor) RunOnCommandStartedHook(cfg *config.Config) error {
 	if cfg.Hooks != nil && cfg.Hooks.OnCommandStarted != nil {
+		log.Println("Running onStartedSuccess hook")
 		if err := e.Exec(*cfg.Hooks.OnCommandStarted); err != nil {
 			return err
 		}
