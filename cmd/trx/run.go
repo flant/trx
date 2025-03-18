@@ -127,13 +127,10 @@ func run(opts runOptions) error {
 		return fmt.Errorf("get commands to run error: %w", err)
 	}
 
-	// TODO: do proper handling of hook errors
-	go func() {
-		log.Println("Running onCommandStarted hook")
-		if hookErr := executor.RunOnCommandStartedHook(cfg); hookErr != nil {
-			log.Printf("WARNING onCommandStarted hook execution error: %s", hookErr.Error())
-		}
-	}()
+	// TODO: think about running this hook concurrently with the command
+	if hookErr := executor.RunOnCommandStartedHook(cfg); hookErr != nil {
+		log.Printf("WARNING onCommandStarted hook execution error: %s", hookErr.Error())
+	}
 
 	if err := executor.Exec(cmdsToRun); err != nil {
 		if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
