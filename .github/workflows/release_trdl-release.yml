@@ -18,7 +18,7 @@ jobs:
           MATTERMOST_WEBHOOK_URL: ${{ secrets.LOOP_NOTIFICATION_WEBHOOK }}
           MATTERMOST_CHANNEL: ${{ secrets.LOOP_NOTIFICATION_CHANNEL }}
           TEXT: |
-            ${{ secrets.LOOP_NOTIFICATION_GROUP }} [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) task sign pls
+            ${{ secrets.LOOP_NOTIFICATION_GROUP }} [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) task sign pls
 
       - name: Release with retry
         uses: werf/trdl-vault-actions/release@main
