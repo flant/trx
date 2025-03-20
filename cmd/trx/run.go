@@ -48,28 +48,12 @@ func run(opts runOptions) error {
 		return fmt.Errorf("init storage error: %w", err)
 	}
 
-	if !disableLock {
-		locker := lock.NewLocker(storage, disableLock)
-		if err := locker.CheckLock(); err != nil {
-			var locked *lock.ErrLocked
-			if errors.As(err, &locked) {
-				log.Printf("Execution is locked by %s at %s\n", locked.User, locked.CreatedAt)
-				return nil
-			}
-			return fmt.Errorf("check lock error: %w", err)
-		}
-		err := locker.Lock()
-		if err != nil {
-			return fmt.Errorf("lock error: %w", err)
-		}
-		log.Println("Excution lock acquired")
-		defer func() {
-			err := locker.Unlock()
-			if err != nil {
-				log.Println("Unlock error: %w", err)
-			}
-			log.Println("Execution lock released")
-		}()
+	locker := lock.NewManager(lock.NewLocalLocker(disableLock))
+	if err := locker.Acquire(cfg.Repo.Url); err != nil {
+		return fmt.Errorf("lock acquire error: %w", err)
+	}
+	if disableLock {
+		log.Println("Processing without execution lock")
 	}
 
 	gitClient, err := git.NewGitClient(cfg.Repo)
