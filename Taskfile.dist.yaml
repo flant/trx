@@ -2,6 +2,10 @@ version: "3"
 
 silent: true
 
+env:
+  CGO_ENABLED: "0"
+  GO111MODULE: "on"
+
 vars:
   version: '{{.version | default "dev"}}'
 
@@ -190,7 +194,6 @@ tasks:
     env:
       GOOS: "{{.targetOS}}"
       GOARCH: "{{.targetArch}}"
-      CGO_ENABLED: 0
 
   build:
     desc: "Build trx dev binary."
@@ -203,16 +206,51 @@ tasks:
 
   _image:build:
     cmds:
-      - docker build {{.CLI_ARGS}} --platform=linux/amd64 -f "{{.dfilePath}}" -t "{{.imageName}}" "{{.context | default "."}}"
+      - docker build {{.CLI_ARGS}} -f "{{.dfilePath}}" -t "{{.imageName}}" "{{.context | default "."}}"
 
   image:build:builder:
-    desc: 'Build werf builder image. Important vars: "imageName".'
+    desc: 'Build main builder image. Important vars: "imageName".'
     cmds:
       - task: _image:build
         vars:
-          dfilePath: Dockerfile
+          dfilePath: scripts/builder/Dockerfile
           imageName:
             sh: "echo registry-write.werf.io/trx/builder:$(git rev-parse HEAD)"
+
+  _image:push:
+    cmds:
+      - docker push {{.CLI_ARGS}} "{{.imageName}}"
+
+  image:publish:builder:
+    desc: 'Build and publish main builder image. Important vars: "imageName".'
+    deps:
+      - image:build:builder
+    cmds:
+      - task: _image:push
+        vars:
+          imageName:
+            sh: "echo registry-write.werf.io/trx/builder:$(git rev-parse HEAD)"
+
+  clean:
+    desc: "Clean all temporary files and build artifacts."
+    deps:
+      - clean:binaries
+
+  clean:binaries:
+    desc: "Clean all built binaries."
+    deps:
+      - clean:binaries:dev
+      - clean:binaries:dist
+
+  clean:binaries:dev:
+    desc: "Clean built dev binaries."
+    cmds:
+      - rm -rf ./bin
+
+  clean:binaries:dist:
+    desc: "Clean built release binaries."
+    cmds:
+      - rm -rf ./dist
 
   verify:dist:binaries:
     desc: "Verify that the distributable binaries are built and have correct platform/arch."
