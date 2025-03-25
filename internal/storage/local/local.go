@@ -18,8 +18,7 @@ const (
 )
 
 type Local struct {
-	path     string
-	lockFile *os.File
+	path string
 }
 
 func NewLocalStorage(repoUrl string) *Local {
