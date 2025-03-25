@@ -36,8 +36,6 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Force execution if no new version found")
 	rootCmd.Flags().BoolVarP(&disableLock, "disable-lock", "", false, "Disable execution locking")
 
-	rootCmd.AddCommand(forceUnlockCmd())
-
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}

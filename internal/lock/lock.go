@@ -1,55 +1,21 @@
 package lock
 
 import (
-	"fmt"
+	"github.com/werf/lockgate"
 )
 
-type Locker struct {
-	storage         Storage
-	lockingDisbaled bool
+type Locker interface {
+	Acquire(lockName string, opts lockgate.AcquireOptions) (bool, lockgate.LockHandle, error)
+}
+type Manager struct {
+	locker Locker
 }
 
-type Storage interface {
-	StoreLockInfo() error
-	RemoveLockInfo() error
-	CheckLock() error
-	ForceRemoveLockInfo() error
+func NewManager(locker Locker) *Manager {
+	return &Manager{locker: locker}
 }
 
-type ErrLocked struct {
-	User      string
-	CreatedAt string
-}
-
-func (e *ErrLocked) Error() string {
-	return fmt.Sprintf("locked by: %s at %s", e.User, e.CreatedAt)
-}
-
-func NewLocker(storage Storage, lockingDisbaled bool) *Locker {
-	return &Locker{
-		storage:         storage,
-		lockingDisbaled: lockingDisbaled,
-	}
-}
-
-func (l *Locker) CheckLock() error {
-	return l.storage.CheckLock()
-}
-
-func (l *Locker) Lock() error {
-	if l.lockingDisbaled {
-		return nil
-	}
-	return l.storage.StoreLockInfo()
-}
-
-func (l *Locker) Unlock() error {
-	if l.lockingDisbaled {
-		return nil
-	}
-	return l.storage.RemoveLockInfo()
-}
-
-func (l *Locker) ForceUnlock() error {
-	return l.storage.ForceRemoveLockInfo()
+func (m *Manager) Acquire(lockName string) error {
+	_, _, err := m.locker.Acquire(lockName, lockgate.AcquireOptions{})
+	return err
 }
