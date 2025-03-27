@@ -1,4 +1,4 @@
-docker_image: registry-write.werf.io/trx/builder:9745d6219488afe95ed082160598174229d26c19@sha256:97674cb0ef290edf0cb12808cc0a24b9601538bccc046faaa24f037870365bc9
+docker_image: registry.werf.io/trx/builder:9745d6219488afe95ed082160598174229d26c19@sha256:97674cb0ef290edf0cb12808cc0a24b9601538bccc046faaa24f037870365bc9
 commands:
   - task build:dist version={{ .Tag }}
   - task verify:dist:binaries version={{ .Tag }}
