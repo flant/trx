@@ -1,4 +1,4 @@
-docker_image: registry.werf.io/trx/builder:9745d6219488afe95ed082160598174229d26c19@sha256:97674cb0ef290edf0cb12808cc0a24b9601538bccc046faaa24f037870365bc9
+docker_image: docker pull ghcr.io/flant/trx/builder:53607301c1d0b7f6c75e52a5784382abb53ac8ce@sha256:95071741e79de3c075fb2fd7c3fdddc54150f53d3f8fe7867d26ffb39c2e05c0
 commands:
   - task build:dist version={{ .Tag }}
   - task verify:dist:binaries version={{ .Tag }}
