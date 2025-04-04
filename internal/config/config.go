@@ -11,13 +11,10 @@ import (
 )
 
 type Config struct {
-	Repo    GitRepo           `mapstructure:"repo" validate:"required"`
-	Quorums []Quorum          `mapstructure:"quorums" validate:"required,min=1"`
-	Env     map[string]string `mapstructure:"env"`
-
-	Hooks             *Hooks   `mapstructure:"hooks,omitempty"`
-	InitLastPublished string   `mapstructure:"initial_last_published_git_commit"`
-	Commands          []string `mapstructure:"commands"`
+	Repo    GitRepo  `mapstructure:"repo" validate:"required"`
+	Quorums []Quorum `mapstructure:"quorums" validate:"required,min=1"`
+	Hooks   Hooks    `mapstructure:"hooks,omitempty"`
+	Tasks   []Task   `mapstructure:"tasks" validate:"required,min=1"`
 }
 
 type GitRepo struct {
@@ -46,11 +43,19 @@ type Quorum struct {
 }
 
 type Hooks struct {
+	Env map[string]string `mapstructure:"env"`
+
 	OnCommandSuccess *[]string `mapstructure:"onCommandSuccess,omitempty"`
 	OnCommandFailure *[]string `mapstructure:"onCommandFailure,omitempty"`
 	OnCommandSkipped *[]string `mapstructure:"onCommandSkipped,omitempty"`
 	OnQuorumFailure  *[]string `mapstructure:"onQuorumFailure,omitempty"`
 	OnCommandStarted *[]string `mapstructure:"onCommandStarted,omitempty"`
+}
+
+type Task struct {
+	Name     string            `mapstructure:"name"`
+	Env      map[string]string `mapstructure:"env"`
+	Commands []string          `mapstructure:"commands"`
 }
 
 func NewConfig(configPath string) (*Config, error) {
@@ -77,11 +82,15 @@ func (config *Config) Validate() error {
 	}
 
 	if err := validateGitRepoPath(config.Repo); err != nil {
-		return err
+		return fmt.Errorf("invalid git repo config: %w", err)
+	}
+
+	if err := validateTasks(config.Tasks); err != nil {
+		return fmt.Errorf("invalid tasks config: %w", err)
 	}
 
 	if err := validateQuorums(config.Quorums); err != nil {
-		return err
+		return fmt.Errorf("invalid quorums config: %w", err)
 	}
 
 	return nil
@@ -137,6 +146,15 @@ func validateKeyFilePath(path []string) error {
 	for _, p := range path {
 		if err := fileExists(p); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateTasks(tasks []Task) error {
+	for _, t := range tasks {
+		if len(t.Commands) == 0 {
+			return fmt.Errorf("no command specified for task %s", t.Name)
 		}
 	}
 	return nil

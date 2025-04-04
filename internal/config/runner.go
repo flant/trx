@@ -9,8 +9,7 @@ import (
 )
 
 type RunnerConfig struct {
-	Commands []string          `mapstructure:"commands"`
-	Env      map[string]string `mapstructure:"env"`
+	Tasks []Task `mapstructure:"quorums" validate:"required,min=1"`
 }
 
 func NewRunnerConfig(wd, configPath string) (*RunnerConfig, error) {
@@ -40,8 +39,8 @@ func (config *RunnerConfig) Validate() error {
 		return err
 	}
 
-	if len(config.Commands) == 0 {
-		return fmt.Errorf("runner config error: no commands to run")
+	if err := validateTasks(config.Tasks); err != nil {
+		return fmt.Errorf("invalid tasks config: %w", err)
 	}
 
 	return nil

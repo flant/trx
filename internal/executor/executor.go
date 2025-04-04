@@ -1,4 +1,4 @@
-package command
+package executor
 
 import (
 	"bufio"
@@ -13,8 +13,6 @@ import (
 	"strings"
 )
 
-var WorkDir = ""
-
 type Vars struct {
 	RepoUrl string
 	RepoTag string
@@ -23,45 +21,49 @@ type Vars struct {
 type Executor struct {
 	Ctx     context.Context
 	WorkDir string
-	Env     []string
-	Vars    map[string]string
 }
 
-func NewExecutor(ctx context.Context, e, vars map[string]string) (*Executor, error) {
-	wd := WorkDir
-	if wd == "" {
-		wd, _ = os.Getwd()
-	}
-	var envs []string
-	for k, v := range e {
-		envs = append(envs, fmt.Sprintf("%s=%s", strings.ToUpper(k), v))
+func NewExecutor(ctx context.Context, workDir string) (*Executor, error) {
+	if workDir == "" {
+		workDir, _ = os.Getwd()
 	}
 	return &Executor{
 		Ctx:     ctx,
-		WorkDir: wd,
-		Env:     envs,
-		Vars:    vars,
+		WorkDir: workDir,
 	}, nil
 }
 
-func (e *Executor) Exec(commands []string) error {
-	cmds, err := resolve(commands, e.Vars)
+func (e *Executor) Exec(commands []string, env, templateVars map[string]string) error {
+	opts, err := prepareExecOpts(e.WorkDir, commands, env, templateVars)
 	if err != nil {
-		return fmt.Errorf("can't resolve commands: %w", err)
+		return fmt.Errorf("can't prepare exec opts: %w", err)
 	}
-	envs, err := resolve(e.Env, e.Vars)
-	if err != nil {
-		return fmt.Errorf("can't resolve envs: %w", err)
-	}
-	script := "set -e\n" + strings.Join(cmds, "\n")
-	if err := execute(e.Ctx, &excuteOpts{
-		cmd: script,
-		env: envs,
-		wd:  e.WorkDir,
-	}); err != nil {
+	if err := execute(e.Ctx, opts); err != nil {
 		return fmt.Errorf("executor error: %w", err)
 	}
 	return nil
+}
+
+func prepareExecOpts(wd string, commands []string, env, templateVars map[string]string) (*excuteOpts, error) {
+	var envs []string
+	for k, v := range env {
+		envs = append(envs, fmt.Sprintf("%s=%s", strings.ToUpper(k), v))
+	}
+	cmds, err := resolve(commands, templateVars)
+	if err != nil {
+		return nil, fmt.Errorf("can't resolve commands: %w", err)
+	}
+	envs, err = resolve(envs, templateVars)
+	if err != nil {
+		return nil, fmt.Errorf("can't resolve envs: %w", err)
+	}
+	script := "set -e\n" + strings.Join(cmds, "\n")
+
+	return &excuteOpts{
+		cmd: script,
+		env: envs,
+		wd:  wd,
+	}, nil
 }
 
 func resolve(commands []string, vars map[string]string) ([]string, error) {

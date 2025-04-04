@@ -7,9 +7,11 @@ import (
 )
 
 var (
-	configPath  string
-	force       bool
-	disableLock bool
+	configPath          string
+	force               bool
+	disableLock         bool
+	disableQuorumsCheck bool
+	reference           string
 )
 
 type runOptions struct {
@@ -35,6 +37,8 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "./trx.yaml", "Path to config file")
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Force execution if no new version found")
 	rootCmd.Flags().BoolVarP(&disableLock, "disable-lock", "", false, "Disable execution locking")
+	rootCmd.Flags().BoolVarP(&disableQuorumsCheck, "disable-quorums-check", "", false, "Run without checking quorums")
+	rootCmd.Flags().StringVarP(&reference, "reference", "r", "", "Tag to run on (default: latest tag)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)

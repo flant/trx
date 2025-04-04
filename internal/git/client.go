@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/user"
-	"path/filepath"
 	"sort"
 
 	"github.com/Masterminds/semver/v3"
@@ -15,12 +13,12 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"trx/internal/command"
 	"trx/internal/config"
 )
 
 type GitClient struct {
-	Repo *git.Repository
+	Repo     *git.Repository
+	RepoPath string
 }
 
 func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
@@ -39,17 +37,24 @@ func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
 	}, nil
 }
 
-func (g *GitClient) GetTargetGitObject() (*TargetGitObject, error) {
-	tag, commit, err := g.GetLastSemverTag()
+func (g *GitClient) GetTargetGitObject(t string) (*TargetGitObject, error) {
+	to, err := getTagInfo(g, t)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get tag info error: %w", err)
 	}
-	to := &TargetGitObject{Tag: tag, Commit: commit}
+
 	err = g.Checkout(to)
 	if err != nil {
 		return nil, fmt.Errorf("checkout error: %w", err)
 	}
 	return to, nil
+}
+
+func getTagInfo(g *GitClient, tag string) (*TargetGitObject, error) {
+	if tag != "" {
+		return g.GetSpecificTag(tag)
+	}
+	return g.GetLastSemverTag()
 }
 
 type TargetGitObject struct {
@@ -87,10 +92,10 @@ func (g *GitClient) Checkout(o *TargetGitObject) error {
 	return nil
 }
 
-func (g *GitClient) GetLastSemverTag() (string, string, error) {
+func (g *GitClient) GetLastSemverTag() (*TargetGitObject, error) {
 	tagRefs, err := g.Repo.Tags()
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
 	var versions []*semver.Version
@@ -106,11 +111,11 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 		return nil
 	})
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
 	if len(versions) == 0 {
-		return "", "", fmt.Errorf("no semantic version tags found")
+		return nil, fmt.Errorf("no semantic version tags found")
 	}
 
 	sort.Sort(sort.Reverse(semver.Collection(versions)))
@@ -119,44 +124,47 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 
 	ref, err := g.Repo.Reference(refName, true)
 	if err != nil {
-		return "", "", err
-	}
-
-	hash := ref.Hash()
-
-	return lastTag, hash.String(), nil
-}
-
-func openGitRepo(r *RepoConfig) (*git.Repository, error) {
-	usr, err := user.Current()
-	if err != nil {
 		return nil, err
 	}
 
-	repoName := RepoNameFromUrl(r.Url)
-	repoPath := filepath.Join(usr.HomeDir, ".trx", repoName)
+	return &TargetGitObject{
+		Tag:    lastTag,
+		Commit: ref.Hash().String(),
+	}, nil
+}
 
+func (g *GitClient) GetSpecificTag(tag string) (*TargetGitObject, error) {
+	ref, err := g.Repo.Tag(tag)
+	if err != nil {
+		return nil, fmt.Errorf("tag %q not found: %w", tag, err)
+	}
+	return &TargetGitObject{
+		Tag:    tag,
+		Commit: ref.Hash().String(),
+	}, nil
+}
+
+func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 	var repo *git.Repository
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+	if _, err := os.Stat(r.RepoPath); os.IsNotExist(err) {
 		cloneOptions := &git.CloneOptions{URL: r.Url}
 		if r.Auth != nil {
 			cloneOptions.Auth = r.Auth.AuthMethod
 		}
 
-		log.Printf("Cloning %s into %s\n", r.Url, repoPath)
-		repo, err = git.PlainClone(repoPath, false, cloneOptions)
+		log.Printf("Cloning %s into %s\n", r.Url, r.RepoPath)
+		repo, err = git.PlainClone(r.RepoPath, false, cloneOptions)
 		if err != nil {
 			return nil, fmt.Errorf("unable to clone repo: %w", err)
 		}
 		log.Println("Cloning done")
 	} else {
-		repo, err = git.PlainOpen(repoPath)
+		repo, err = git.PlainOpen(r.RepoPath)
 		if err != nil {
 			return nil, fmt.Errorf("unable to open repo: %w", err)
 		}
 	}
 
-	command.WorkDir = repoPath
 	log.Println("Fetching tags")
 	fetchOptions := &git.FetchOptions{
 		RefSpecs: []gitconfig.RefSpec{
@@ -166,7 +174,7 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 	if r.Auth != nil {
 		fetchOptions.Auth = r.Auth.AuthMethod
 	}
-	err = repo.Fetch(fetchOptions)
+	err := repo.Fetch(fetchOptions)
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil, fmt.Errorf("unable to fetch tags: %w", err)
 	}

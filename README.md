@@ -77,11 +77,16 @@ The `trx.yaml` file inside the project repository defines commands and environme
 Example:
 
 ```yaml
-commands:
-  - werf converge
-  - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
-env:
-  WERF_ENV: "production"
+tasks:
+  - name: deploy 
+    commands:
+      - werf converge
+      - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
+  - name: export
+    env:
+      WERF_SET_GIT_REV: "werf.git_rev={{ .RepoCommit }}"
+    commands:
+      - werf export
 ```
 
 Available template variables:
@@ -108,20 +113,20 @@ repo:
 
   # Optional, default is `trx.yaml` in the repository.
   configFile: "trx.yaml"
-
-  # Optional. Commands defined here have a higher priority than those specified in `trx.yaml`.
-  commands:
-    - werf converge
-    - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
-
-  # Optional. Set environment variables here to be used in the commands.
-  # Environment variables defined here are merged with those in the configFile,
-  # but have higher priority (values in this section will override those in the configFile).
-  env:
-    WERF_ENV: "production"
-
   # Optional. Ensures processing starts from a specific tag and prevents processing older tags (safeguard against freeze attacks).
   initialLastProcessedTag: "v0.10.1"
+
+# Optional. Tasks defined here have a higher priority than those specified in `trx.yaml`.
+tasks:
+  - name: deploy 
+    commands:
+      - werf converge
+      - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
+  - name: export
+    env:
+      WERF_SET_GIT_REV: "werf.git_rev={{ .RepoCommit }}"
+    commands:
+      - werf export
 
 quorums:
   - name: main
@@ -138,12 +143,14 @@ quorums:
 
 # Optional. Define actions to be taken at different stages of command execution.
 hooks:
+  env:
+     MSG: 'Task {{ .FailedTaskName }} failed'
   onCommandStarted:
     - "echo 'Command started: {{ .RepoTag }} at {{ .RepoCommit }}'"
   onCommandSuccess:
     - "echo 'Success: {{ .RepoTag }}'"
   onCommandFailure:
-    - "echo 'Failure: {{ .RepoTag }}'"
+    - "echo $MSG"
   onCommandSkipped:
     - "echo 'Skipped: {{ .RepoTag }}'"
   onQuorumFailure:
@@ -182,7 +189,16 @@ trx --config trx.yaml -- ls -la
 ```
 
 To force the execution even if no new version is detected, use the `--force` flag:
-
 ```sh
 trx --force
+```
+
+To run on specific tag use `-r` or `--reference` flags:
+```sh
+trx --reference v0.0.0
+```
+
+To disable quorum checking use `--disable-quorums-check` flag:
+```sh
+trx --disable-quorums-check
 ```

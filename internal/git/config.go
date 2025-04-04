@@ -3,6 +3,8 @@ package git
 import (
 	"fmt"
 	"os"
+	"os/user"
+	"path/filepath"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -12,8 +14,9 @@ import (
 )
 
 type RepoConfig struct {
-	Url  string
-	Auth *Auth
+	Url      string
+	Auth     *Auth
+	RepoPath string
 }
 
 type Auth struct {
@@ -23,6 +26,11 @@ type Auth struct {
 func NewRepoConfig(config config.GitRepo) (*RepoConfig, error) {
 	if config.Url == "" {
 		return nil, fmt.Errorf("git url not specified")
+	}
+
+	usr, err := user.Current()
+	if err != nil {
+		return nil, err
 	}
 
 	if config.Auth.BasicAuth != nil {
@@ -41,8 +49,9 @@ func NewRepoConfig(config config.GitRepo) (*RepoConfig, error) {
 		return nil, err
 	}
 	return &RepoConfig{
-		Url:  config.Url,
-		Auth: auth,
+		Url:      config.Url,
+		Auth:     auth,
+		RepoPath: filepath.Join(usr.HomeDir, ".trx", RepoNameFromUrl(config.Url)),
 	}, nil
 }
 

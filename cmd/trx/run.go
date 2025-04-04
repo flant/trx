@@ -11,12 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"trx/internal/command"
 	"trx/internal/config"
 	"trx/internal/git"
+	"trx/internal/hooks"
 	"trx/internal/lock"
 	"trx/internal/quorum"
 	"trx/internal/storage"
+	"trx/internal/tasks"
+	"trx/internal/templates"
 )
 
 func run(opts runOptions) error {
@@ -61,7 +63,7 @@ func run(opts runOptions) error {
 		return fmt.Errorf("new git client error: %w", err)
 	}
 
-	gitTargetObject, err := gitClient.GetTargetGitObject()
+	gitTargetObject, err := gitClient.GetTargetGitObject(reference)
 	if err != nil {
 		return fmt.Errorf("get target git object error: %w", err)
 	}
@@ -71,9 +73,19 @@ func run(opts runOptions) error {
 		return fmt.Errorf("check last published commit error: %w", err)
 	}
 
-	executor, err := command.NewExecutor(ctx, cfg.Env, generateCmdVars(cfg, gitTargetObject))
+	repoTemplatevars := templates.GetRepoTemplateVars(templates.RepoTemplateVarsData{
+		RepoTag:    gitTargetObject.Tag,
+		RepoUrl:    cfg.Repo.Url,
+		RepoCommit: gitTargetObject.Commit,
+	})
+
+	hookExecutor, err := hooks.NewHookExecutor(ctx, hooks.HookExecutorOptions{
+		Env:          cfg.Hooks.Env,
+		TemplateVars: repoTemplatevars,
+		WorkDir:      gitClient.RepoPath,
+	})
 	if err != nil {
-		return fmt.Errorf("command executor error: %w", err)
+		return fmt.Errorf("hooks executor error: %w", err)
 	}
 
 	isNewVersion, err := git.IsNewerVersion(gitTargetObject.Tag, lastSucceedTag, cfg.Repo.InitialLastProcessedTag)
@@ -85,7 +97,7 @@ func run(opts runOptions) error {
 		case true:
 			log.Println("No new version, but force flag specified. Proceeding... ")
 		case false:
-			if hookErr := executor.RunOnCommandSkippedHook(cfg); hookErr != nil {
+			if hookErr := hookExecutor.RunOnCommandSkippedHook(cfg); hookErr != nil {
 				log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
 			}
 			log.Println("No new version. execution will be skipped")
@@ -93,42 +105,55 @@ func run(opts runOptions) error {
 		}
 	}
 
-	err = quorum.CheckQuorums(cfg.Quorums, gitClient.Repo, gitTargetObject.Tag)
-	if err != nil {
-		var qErr *quorum.Error
-		if errors.As(err, &qErr) {
-			executor.Vars["FailedQuorumName"] = qErr.QuorumName
-			if hookErr := executor.RunOnQuorumFailedHook(cfg); hookErr != nil {
-				log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
+	if !disableQuorumsCheck {
+		if err := quorum.CheckQuorums(cfg.Quorums, gitClient.Repo, gitTargetObject.Tag); err != nil {
+			var qErr *quorum.Error
+			if errors.As(err, &qErr) {
+				if hookErr := hookExecutor.RunOnQuorumFailedHook(cfg, qErr.QuorumName); hookErr != nil {
+					log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
+				}
+				return fmt.Errorf("quorum error: %w", qErr.Err)
+			} else {
+				return fmt.Errorf("quorum error: %w", err)
 			}
-			return fmt.Errorf("quorum error: %w", qErr.Err)
-		} else {
-			return fmt.Errorf("quorum error: %w", err)
 		}
 	}
 
-	cmdsToRun, err := getCmdsToRun(cfg, opts, executor)
+	taskExecutor, err := tasks.NewTaskExecutor(ctx, tasks.TaskExecutorOptions{
+		TemplateVars: repoTemplatevars,
+		WorkDir:      gitClient.RepoPath,
+	})
 	if err != nil {
-		return fmt.Errorf("get commands to run error: %w", err)
+		return fmt.Errorf("task executor error: %w", err)
+	}
+
+	tasksToRun, err := getTasksToRun(cfg, gitClient.RepoPath, opts)
+	if err != nil {
+		return fmt.Errorf("task executor error: %w", err)
 	}
 
 	// TODO: think about running this hook concurrently with the command
-	if hookErr := executor.RunOnCommandStartedHook(cfg); hookErr != nil {
+	if hookErr := hookExecutor.RunOnCommandStartedHook(cfg); hookErr != nil {
 		log.Printf("WARNING onCommandStarted hook execution error: %s", hookErr.Error())
 	}
 
-	if err := executor.Exec(cmdsToRun); err != nil {
-		if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
-			log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+	if err := taskExecutor.RunTasks(tasksToRun); err != nil {
+		var runErr *tasks.Error
+		if errors.As(err, &runErr) {
+			if hookErr := hookExecutor.RunOnCommandFailureHook(cfg, runErr.TaskName); hookErr != nil {
+				log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+			}
+			return fmt.Errorf("tasks running error: %w", runErr.Err)
+		} else {
+			return fmt.Errorf("tasks running error: %w", err)
 		}
-		return fmt.Errorf("run command error: %w", err)
 	}
 
 	if err := storage.StoreSucceedTag(gitTargetObject.Tag); err != nil {
 		return fmt.Errorf("store last successed tag error: %w", err)
 	}
 
-	if hookErr := executor.RunOnCommandSuccessHook(cfg); hookErr != nil {
+	if hookErr := hookExecutor.RunOnCommandSuccessHook(cfg); hookErr != nil {
 		log.Println("WARNING onCommandSuccess hook execution error: %w", hookErr)
 	}
 
@@ -136,46 +161,46 @@ func run(opts runOptions) error {
 	return nil
 }
 
-func generateCmdVars(cfg *config.Config, t *git.TargetGitObject) map[string]string {
-	vars := make(map[string]string)
-	vars["RepoTag"] = t.Tag
-	vars["RepoUrl"] = cfg.Repo.Url
-	vars["RepoCommit"] = t.Commit
-	return vars
-}
-
-func mergeEnvs(envs, cfgEnv map[string]string) []string {
-	for k, v := range cfgEnv {
-		envs[k] = v
-	}
-	newEnv := make([]string, 0, len(envs))
-	for k, v := range envs {
-		newEnv = append(newEnv, fmt.Sprintf("%s=%s", k, v))
-	}
-	return newEnv
-}
-
-func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executor) ([]string, error) {
-	var cmdsToRun []string
+func getTasksToRun(cfg *config.Config, wd string, opts runOptions) ([]tasks.Task, error) {
 	if len(opts.cmdFromCli) > 0 {
-		cmdsToRun = []string{strings.Join(opts.cmdFromCli, " ")}
-		return cmdsToRun, nil
+		return []tasks.Task{
+			{
+				Name:     "command-from-cli",
+				Commands: []string{strings.Join(opts.cmdFromCli, " ")},
+			},
+		}, nil
 	}
 
-	if len(cfg.Commands) > 0 {
-		cmdsToRun = cfg.Commands
-	} else {
-		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.Repo.ConfigFile)
-		if err != nil {
-			return nil, fmt.Errorf("config error: %w", err)
-		}
-		cmdsToRun = runCfg.Commands
-		executor.Env = mergeEnvs(cfg.Env, runCfg.Env)
+	if len(cfg.Tasks) > 0 {
+		return cfgToTasks(cfg.Tasks), nil
 	}
 
-	if len(cmdsToRun) == 0 {
+	runCfg, err := config.NewRunnerConfig(wd, cfg.Repo.ConfigFile)
+	if err != nil {
+		return nil, fmt.Errorf("config error: %w", err)
+	}
+
+	tasksList := cfgToTasks(runCfg.Tasks)
+
+	if len(tasksList) == 0 {
 		return nil, fmt.Errorf("no commands to run")
 	}
 
-	return cmdsToRun, nil
+	return tasksList, nil
+}
+
+func cfgToTasks(c []config.Task) []tasks.Task {
+	res := []tasks.Task{}
+	for i, t := range c {
+		tsk := tasks.Task{
+			Name:     t.Name,
+			Env:      t.Env,
+			Commands: t.Commands,
+		}
+		if tsk.Name == "" {
+			tsk.Name = fmt.Sprint(i)
+		}
+		res = append(res, tsk)
+	}
+	return res
 }
