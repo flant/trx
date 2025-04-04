@@ -2,12 +2,11 @@ commands:
   - echo "$TEST" | base64
   - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
 
-
 tasks:
-  - name: test 
+  - name: test
     commands:
-     - echo "$TEST" | base64
-     - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
+      - echo "$TEST" | base64
+      - echo "{{ .RepoTag }} {{ .RepoCommit }} {{ .RepoUrl }}"
   - name: test2
     commands:
       - ls -l /xz

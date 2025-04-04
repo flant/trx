@@ -64,7 +64,6 @@ func prepareExecOpts(wd string, commands []string, env, templateVars map[string]
 		env: envs,
 		wd:  wd,
 	}, nil
-
 }
 
 func resolve(commands []string, vars map[string]string) ([]string, error) {
