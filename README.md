@@ -152,21 +152,7 @@ hooks:
 
 ### Installing trx
 
-Clone the repository:
-
-```sh
-git clone https://fox.flant.com/deckhouse/delivery/trx.git
-cd trx
-```
-
-Ensure that you have Go (version 1.23 or later) installed on your system.
-
-Build the binary:
-
-```sh
-cd cmd/trx
-go build -o bin/trx ./cmd/trx
-```
+Follow instructions on [GitHub Releases](https://github.com/flant/trx/releases).
 
 ### Running
 
