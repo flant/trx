@@ -33,7 +33,8 @@ func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
 	}
 
 	return &GitClient{
-		Repo: repo,
+		Repo:     repo,
+		RepoPath: repoConf.RepoPath,
 	}, nil
 }
 

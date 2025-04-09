@@ -79,8 +79,16 @@ func run(opts runOptions) error {
 		RepoCommit: gitTargetObject.Commit,
 	})
 
+	var hooksEnvs map[string]string
+	if cfg.Env != nil {
+		throwDeprWarning(true)
+		hooksEnvs = cfg.Env
+	} else {
+		hooksEnvs = cfg.Hooks.Env
+	}
+
 	hookExecutor, err := hooks.NewHookExecutor(ctx, hooks.HookExecutorOptions{
-		Env:          cfg.Hooks.Env,
+		Env:          hooksEnvs,
 		TemplateVars: repoTemplatevars,
 		WorkDir:      gitClient.RepoPath,
 	})
@@ -162,6 +170,16 @@ func run(opts runOptions) error {
 }
 
 func getTasksToRun(cfg *config.Config, wd string, opts runOptions) ([]tasks.Task, error) {
+	if len(cfg.Commands) > 0 {
+		throwDeprWarning(false)
+		return []tasks.Task{
+			{
+				Name:     "#0",
+				Commands: cfg.Commands,
+				Env:      cfg.Env,
+			},
+		}, nil
+	}
 	if len(opts.cmdFromCli) > 0 {
 		return []tasks.Task{
 			{
@@ -177,7 +195,18 @@ func getTasksToRun(cfg *config.Config, wd string, opts runOptions) ([]tasks.Task
 
 	runCfg, err := config.NewRunnerConfig(wd, cfg.Repo.ConfigFile)
 	if err != nil {
-		return nil, fmt.Errorf("config error: %w", err)
+		return nil, fmt.Errorf("runner config error: %w", err)
+	}
+
+	if len(runCfg.Commands) > 0 {
+		throwDeprWarning(false)
+		return []tasks.Task{
+			{
+				Name:     "#0",
+				Commands: runCfg.Commands,
+				Env:      runCfg.Env,
+			},
+		}, nil
 	}
 
 	tasksList := cfgToTasks(runCfg.Tasks)
@@ -203,4 +232,14 @@ func cfgToTasks(c []config.Task) []tasks.Task {
 		res = append(res, tsk)
 	}
 	return res
+}
+
+func throwDeprWarning(hooks bool) {
+	if hooks {
+		log.Println("WARNING! You're using deprecated 'env' field in config. Please use 'tasks.task.env' and 'hooks.env' instead.")
+		return
+	} else {
+		deprWarning := "WARNING! You're using deprecated 'commands' field in config. Please use 'tasks' instead."
+		log.Println(deprWarning)
+	}
 }

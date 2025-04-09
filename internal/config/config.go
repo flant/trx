@@ -14,7 +14,11 @@ type Config struct {
 	Repo    GitRepo  `mapstructure:"repo" validate:"required"`
 	Quorums []Quorum `mapstructure:"quorums" validate:"required,min=1"`
 	Hooks   Hooks    `mapstructure:"hooks,omitempty"`
-	Tasks   []Task   `mapstructure:"tasks" validate:"required,min=1"`
+	Tasks   []Task   `mapstructure:"tasks"`
+
+	// Legacy
+	Env      map[string]string `mapstructure:"env"`
+	Commands []string          `mapstructure:"commands"`
 }
 
 type GitRepo struct {

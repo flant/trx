@@ -122,6 +122,8 @@ tasks:
     commands:
       - werf converge
       - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
+    env:
+      WERF_BUILDAH_MODE: auto
   - name: export
     env:
       WERF_SET_GIT_REV: "werf.git_rev={{ .RepoCommit }}"

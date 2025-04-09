@@ -9,7 +9,11 @@ import (
 )
 
 type RunnerConfig struct {
-	Tasks []Task `mapstructure:"quorums" validate:"required,min=1"`
+	Tasks []Task `mapstructure:"quorums"`
+
+	// Legacy
+	Commands []string          `mapstructure:"commands"`
+	Env      map[string]string `mapstructure:"env"`
 }
 
 func NewRunnerConfig(wd, configPath string) (*RunnerConfig, error) {
