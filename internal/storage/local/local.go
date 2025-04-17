@@ -29,8 +29,12 @@ func NewLocalStorage(repoUrl string) *Local {
 	}
 }
 
-func (s *Local) CheckLastSucceedTag() (string, error) {
-	filePath := filepath.Join(s.path, fileLastProcessedCommit)
+func (s *Local) CheckTaskLastSucceedTag(taskName string) (string, error) {
+	if taskName == "" {
+		return "", fmt.Errorf("task name can't be empty")
+	}
+	path := filepath.Join(s.path, taskName)
+	filePath := filepath.Join(path, fileLastProcessedCommit)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -48,16 +52,19 @@ func (s *Local) CheckLastSucceedTag() (string, error) {
 	return commit, nil
 }
 
-func (s *Local) StoreSucceedTag(commit string) error {
+func (s *Local) StoreTaskSucceedTag(taskName, commit string) error {
+	if taskName == "" {
+		return fmt.Errorf("task name can't be empty")
+	}
 	if commit == "" {
 		return fmt.Errorf("tag can't be empty")
 	}
-
-	if err := os.MkdirAll(s.path, 0o755); err != nil {
+	path := filepath.Join(s.path, taskName)
+	if err := os.MkdirAll(path, 0o755); err != nil {
 		return err
 	}
 
-	filePath := filepath.Join(s.path, fileLastProcessedCommit)
+	filePath := filepath.Join(path, fileLastProcessedCommit)
 
 	return os.WriteFile(filePath, []byte(commit+"\n"), 0o644)
 }

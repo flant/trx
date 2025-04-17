@@ -57,9 +57,10 @@ type Hooks struct {
 }
 
 type Task struct {
-	Name     string            `mapstructure:"name"`
-	Env      map[string]string `mapstructure:"env"`
-	Commands []string          `mapstructure:"commands"`
+	Name                    string            `mapstructure:"name"`
+	Env                     map[string]string `mapstructure:"env"`
+	Commands                []string          `mapstructure:"commands"`
+	InitialLastProcessedTag string            `mapstructure:"initialLastProcessedTag"`
 }
 
 func NewConfig(configPath string) (*Config, error) {

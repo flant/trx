@@ -12,6 +12,7 @@ var (
 	disableLock         bool
 	disableQuorumsCheck bool
 	reference           string
+	task                string
 )
 
 type runOptions struct {
@@ -39,6 +40,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.Flags().BoolVarP(&disableLock, "disable-lock", "", false, "Disable execution locking")
 	rootCmd.Flags().BoolVarP(&disableQuorumsCheck, "disable-quorums-check", "", false, "Run without checking quorums")
 	rootCmd.Flags().StringVarP(&reference, "reference", "r", "", "Tag to run on (default: latest tag)")
+	rootCmd.Flags().StringVarP(&task, "task", "t", "", "Name of the task to run. If no name provided use ordinal number e.g. 1,2,3...etc. (default: first task in config)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)

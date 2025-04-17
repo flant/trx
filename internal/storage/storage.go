@@ -6,8 +6,8 @@ import (
 )
 
 type Storage interface {
-	CheckLastSucceedTag() (string, error)
-	StoreSucceedTag(commit string) error
+	CheckTaskLastSucceedTag(taskName string) (string, error)
+	StoreTaskSucceedTag(taskName, commit string) error
 }
 
 type StorageService struct {
@@ -28,10 +28,10 @@ func NewStorage(opts *StorageOpts) (*StorageService, error) {
 	}
 }
 
-func (s *StorageService) CheckLastSucceedTag() (string, error) {
-	return s.storage.CheckLastSucceedTag()
+func (s *StorageService) CheckTaskLastSucceedTag(taskName string) (string, error) {
+	return s.storage.CheckTaskLastSucceedTag(taskName)
 }
 
-func (s *StorageService) StoreSucceedTag(commit string) error {
-	return s.storage.StoreSucceedTag(commit)
+func (s *StorageService) StoreTaskSucceedTag(taskName, commit string) error {
+	return s.storage.StoreTaskSucceedTag(taskName, commit)
 }
