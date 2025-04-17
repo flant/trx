@@ -30,8 +30,8 @@ func TestPrepareExecOpts(t *testing.T) {
 		{
 			name:     "command with template vars",
 			wd:       "/app",
-			commands: []string{"echo {{ .RepoTag}}"},
-			env:      map[string]string{"env": "{{ .RepoUrl}}"},
+			commands: []string{"echo {{ .RepoTag }}"},
+			env:      map[string]string{"env": "{{ .RepoUrl }}"},
 			templateVars: map[string]string{
 				"RepoTag":    "v1.0.0",
 				"RepoUrl":    "https://example.com/repo.git",

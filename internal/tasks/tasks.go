@@ -50,7 +50,8 @@ func NewTaskExecutor(ctx context.Context, opts TaskExecutorOptions) (*TaskExecut
 		return nil, fmt.Errorf("can't create executor: %w", err)
 	}
 	return &TaskExecutor{
-		executor: e,
+		executor:     e,
+		templateVars: opts.TemplateVars,
 	}, nil
 }
 
