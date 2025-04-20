@@ -20,6 +20,10 @@ import (
 	"trx/internal/templates"
 )
 
+type Executor interface {
+	RunTasks(tasks []tasks.Task) error
+}
+
 func run(opts runOptions) error {
 	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
@@ -39,14 +43,7 @@ func run(opts runOptions) error {
 
 	cfg, err := config.NewConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("config error: %w", err)
-	}
-
-	storage, err := storage.NewStorage(&storage.StorageOpts{
-		Config: cfg,
-	})
-	if err != nil {
-		return fmt.Errorf("init storage error: %w", err)
+		return err
 	}
 
 	locker := lock.NewManager(lock.NewLocalLocker(disableLock))
@@ -57,7 +54,7 @@ func run(opts runOptions) error {
 		log.Println("Processing without execution lock")
 	}
 
-	gitClient, err := git.NewGitClient(cfg.Repo)
+	gitClient, err := git.NewGitClient(*cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("new git client error: %w", err)
 	}
@@ -82,18 +79,24 @@ func run(opts runOptions) error {
 	}
 
 	if !disableQuorumsCheck {
-		if err := quorum.CheckQuorums(cfg.Quorums, gitClient.Repo, gitTargetObject.Tag); err != nil {
-			var qErr *quorum.Error
-			if errors.As(err, &qErr) {
-				hookExecutor.RunOnQuorumFailedHook(qErr.QuorumName)
-				return fmt.Errorf("quorum error: %w", qErr.Err)
-			} else {
-				return fmt.Errorf("quorum error: %w", err)
-			}
+		if err := quorum.CheckQuorums(&quorum.CheckQuorumsRequest{
+			Quorums:      cfg.Quorums,
+			Repo:         gitClient.Repo,
+			Tag:          gitTargetObject.Tag,
+			HookExecutor: hookExecutor,
+		}); err != nil {
+			return err
 		}
 	}
 
-	taskExecutor, err := tasks.NewTaskExecutor(ctx, tasks.TaskExecutorOptions{
+	storage, err := storage.NewStorage(&storage.StorageOpts{
+		Config: cfg,
+	})
+	if err != nil {
+		return fmt.Errorf("init storage error: %w", err)
+	}
+
+	taskExecutor, err := getExecutor(ctx, tasks.TaskExecutorOptions{
 		Storage:      storage,
 		TemplateVars: repoTemplatevars,
 		WorkDir:      gitClient.RepoPath,
@@ -120,8 +123,6 @@ func run(opts runOptions) error {
 	}
 
 	hookExecutor.RunOnCommandSuccessHook()
-
-	log.Println("All done")
 	return nil
 }
 
@@ -131,14 +132,37 @@ func handleRunTasksError(err error, hookExecutor *hooks.HookExecutor) error {
 		switch {
 		case errors.Is(runErr.Err, tasks.ErrNoNewVersion):
 			hookExecutor.RunOnCommandSkippedHook()
-			return fmt.Errorf("task [%s] skipped: no new version detected", runErr.TaskName)
+			log.Printf("task %s skipped: no new version detected\n", runErr.TaskName)
+			return nil
 
 		case errors.Is(runErr.Err, tasks.ErrExcutionFailed):
 			hookExecutor.RunOnCommandFailureHook(runErr.TaskName)
-			return fmt.Errorf("tasks [%s] error: %w", runErr.TaskName, runErr.Err)
+			return fmt.Errorf("task %s failed: %w", runErr.TaskName, runErr.Err)
+
 		default:
 			return fmt.Errorf("task running error: %w", runErr.Err)
 		}
 	}
 	return fmt.Errorf("tasks running error: %w", err)
+}
+
+func getExecutor(ctx context.Context, opts tasks.TaskExecutorOptions) (Executor, error) {
+	commonOpts := tasks.TaskExecutorOptions{
+		Storage:      opts.Storage,
+		TemplateVars: opts.TemplateVars,
+		WorkDir:      opts.WorkDir,
+	}
+	if force {
+		taskExecutor, err := tasks.NewTaskForceExecutor(ctx, commonOpts)
+		if err != nil {
+			return nil, fmt.Errorf("task executor error: %w", err)
+		}
+		return taskExecutor, nil
+	} else {
+		taskExecutor, err := tasks.NewTaskExecutor(ctx, commonOpts)
+		if err != nil {
+			return nil, fmt.Errorf("task executor error: %w", err)
+		}
+		return taskExecutor, nil
+	}
 }

@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"trx/internal/config"
@@ -30,7 +31,7 @@ func NewHookExecutor(ctx context.Context, cfg *config.Config, opts HookExecutorO
 	hooks := cfg.Hooks
 	e, err := executor.NewExecutor(ctx, opts.WorkDir)
 	if err != nil {
-		log.Fatalf("failed to create executor: %v", err)
+		return nil, fmt.Errorf("failed to create executor: %v", err)
 	}
 	return &HookExecutor{
 		hooks:        hooks,

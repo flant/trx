@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -35,6 +36,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	}
 
 	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "./trx.yaml", "Path to config file")
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Force execution if no new version found")
 	rootCmd.Flags().BoolVarP(&disableLock, "disable-lock", "", false, "Disable execution locking")
@@ -43,7 +45,8 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.Flags().StringVarP(&task, "task", "t", "", "Name of the task to run. If no name provided use ordinal number e.g. 1,2,3...etc. (default: first task in config)")
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		os.Exit(1)
 	}
 }
 

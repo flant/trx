@@ -5,14 +5,13 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Repo    GitRepo  `mapstructure:"repo" validate:"required"`
-	Quorums []Quorum `mapstructure:"quorums" validate:"required,min=1"`
+	Repo    *GitRepo `mapstructure:"repo"`
+	Quorums []Quorum `mapstructure:"quorums"`
 	Hooks   Hooks    `mapstructure:"hooks,omitempty"`
 	Tasks   []Task   `mapstructure:"tasks"`
 
@@ -81,27 +80,22 @@ func _default() {
 }
 
 func (config *Config) Validate() error {
-	validate := validator.New()
-	if err := validate.Struct(config); err != nil {
-		return err
-	}
-
 	if err := validateGitRepoPath(config.Repo); err != nil {
 		return fmt.Errorf("invalid git repo config: %w", err)
 	}
-
 	if err := validateTasks(config.Tasks); err != nil {
 		return fmt.Errorf("invalid tasks config: %w", err)
 	}
-
 	if err := validateQuorums(config.Quorums); err != nil {
 		return fmt.Errorf("invalid quorums config: %w", err)
 	}
-
 	return nil
 }
 
-func validateGitRepoPath(repo GitRepo) error {
+func validateGitRepoPath(repo *GitRepo) error {
+	if repo == nil {
+		return fmt.Errorf("field 'repo' is required")
+	}
 	sshGitRegex := regexp.MustCompile(`^git@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:[a-zA-Z0-9-_/]+\.git)$`)
 	httpsGitRegex := regexp.MustCompile(`^https?://(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?\.git$`)
 
@@ -128,6 +122,9 @@ func validateGitRepoPath(repo GitRepo) error {
 }
 
 func validateQuorums(quorums []Quorum) error {
+	if len(quorums) == 0 {
+		return fmt.Errorf("no quorums specified")
+	}
 	for _, q := range quorums {
 		if q.MinNumberOfKeys < 1 {
 			return fmt.Errorf("quorum size needs to be greater or equal 1")

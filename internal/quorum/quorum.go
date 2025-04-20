@@ -1,6 +1,7 @@
 package quorum
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -25,7 +26,33 @@ func (e *Error) Unwrap() error {
 	return e.Err
 }
 
-func CheckQuorums(quorums []config.Quorum, repo *git.Repository, tag string) error {
+type HookExecutor interface {
+	RunOnQuorumFailedHook(quorumName string) error
+}
+
+type CheckQuorumsRequest struct {
+	Quorums      []config.Quorum
+	Repo         *git.Repository
+	Tag          string
+	HookExecutor HookExecutor
+}
+
+func CheckQuorums(r *CheckQuorumsRequest) error {
+	if err := checkQuorums(r.Quorums, r.Repo, r.Tag); err != nil {
+		var qErr *Error
+		if errors.As(err, &qErr) {
+			if r.HookExecutor != nil {
+				r.HookExecutor.RunOnQuorumFailedHook(qErr.QuorumName)
+			}
+			return fmt.Errorf("quorum error: %w", qErr.Err)
+		} else {
+			return fmt.Errorf("quorum error: %w", err)
+		}
+	}
+	return nil
+}
+
+func checkQuorums(quorums []config.Quorum, repo *git.Repository, tag string) error {
 	var g errgroup.Group
 	for _, q := range quorums {
 		g.Go(func() error {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"trx/internal/config"
 	"trx/internal/executor"
@@ -98,12 +99,9 @@ func NewTaskForceExecutor(ctx context.Context, opts TaskExecutorOptions) (*TaskE
 
 func (e *TaskExecutorForced) RunTasks(tasks []Task) error {
 	for _, t := range tasks {
-		if err := e.executor.Exec(t.Commands, t.Env, e.templateVars); err != nil {
-			return &Error{
-				TaskName:   t.Name,
-				Err:        ErrExcutionFailed,
-				ErrMessage: err.Error(),
-			}
+		t.Name = fmt.Sprintf("%s (forced)", t.Name)
+		if err := run(e.executor, t, e.templateVars); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -111,24 +109,44 @@ func (e *TaskExecutorForced) RunTasks(tasks []Task) error {
 
 func (e *TaskExecutor) RunTasks(tasks []Task) error {
 	for _, t := range tasks {
+
 		if err := t.checkIfNewVersion(e.storage); err != nil {
 			return &Error{
 				TaskName: t.Name,
 				Err:      ErrNoNewVersion,
 			}
 		}
-		if err := e.executor.Exec(t.Commands, t.Env, e.templateVars); err != nil {
-			return &Error{
-				TaskName:   t.Name,
-				Err:        ErrExcutionFailed,
-				ErrMessage: err.Error(),
-			}
+		if err := run(e.executor, t, e.templateVars); err != nil {
+			return err
 		}
 		if err := e.storage.StoreTaskSucceedTag(t.Name, t.Version); err != nil {
 			return fmt.Errorf("store last successed tag error for task %s: %w", t.Name, err)
 		}
 	}
 	return nil
+}
+
+func run(e Executor, t Task, vars map[string]string) error {
+	log.Printf("--- Running task %s", t.Name)
+	start := time.Now()
+	if err := e.Exec(t.Commands, t.Env, vars); err != nil {
+		return &Error{
+			TaskName:   t.Name,
+			Err:        ErrExcutionFailed,
+			ErrMessage: err.Error(),
+		}
+	}
+	elapsed := time.Since(start)
+	log.Printf("--- Task %s completed in %s", t.Name, formatDuration(elapsed))
+	return nil
+}
+
+func formatDuration(d time.Duration) string {
+	totalMillis := d.Milliseconds()
+	minutes := totalMillis / 60000
+	seconds := (totalMillis % 60000) / 1000
+	millis := totalMillis % 1000
+	return fmt.Sprintf("%02dm:%02ds:%03dms", minutes, seconds, millis)
 }
 
 func (t *Task) checkIfNewVersion(storage Storage) error {

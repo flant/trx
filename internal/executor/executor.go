@@ -133,7 +133,7 @@ func execute(ctx context.Context, opts *excuteOpts) error {
 
 	if err := cmd.Wait(); err != nil {
 		if stderr.Len() > 0 {
-			log.Println("executing error:", stderr.String())
+			log.Println(stderr.String())
 		}
 		return fmt.Errorf("error executing command: %w", err)
 	}

@@ -3,7 +3,7 @@ package git
 import (
 	"fmt"
 	"log"
-	"path"
+	"net/url"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -27,8 +27,32 @@ func VerifyTagSignatures(repo *git.Repository, r VerifyTagSignaturesRequest) err
 	return nil
 }
 
-func RepoNameFromUrl(url string) string {
-	return strings.TrimSuffix(path.Base(url), ".git")
+func RepoNameFromUrl(repoUrl string) string {
+	repoUrl = strings.TrimSuffix(repoUrl, ".git")
+
+	// SSH case: git@github.com:user/repo
+	if strings.HasPrefix(repoUrl, "git@") {
+		// git@github.com:user/repo → github.com/user/repo
+		parts := strings.SplitN(repoUrl, ":", 2)
+		host := strings.TrimPrefix(parts[0], "git@")
+		path := parts[1]
+		return toDottedName(host + "/" + path)
+	}
+
+	// HTTPS case: https://github.com/user/repo
+	if u, err := url.Parse(repoUrl); err == nil {
+		return toDottedName(u.Host + u.Path)
+	}
+
+	// fallback
+	return toDottedName(repoUrl)
+}
+
+func toDottedName(s string) string {
+	s = strings.TrimPrefix(s, "/")
+	s = strings.TrimSuffix(s, "/")
+	parts := strings.Split(s, "/")
+	return strings.Join(parts, ".")
 }
 
 func IsNewerVersion(current, last, initial string) (bool, error) {
