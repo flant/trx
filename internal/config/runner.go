@@ -9,7 +9,7 @@ import (
 )
 
 type RunnerConfig struct {
-	Tasks []Task `mapstructure:"quorums"`
+	Tasks []Task `mapstructure:"tasks"`
 
 	// Legacy
 	Commands []string          `mapstructure:"commands"`

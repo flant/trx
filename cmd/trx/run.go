@@ -116,7 +116,9 @@ func run(opts runOptions) error {
 	}
 
 	// TODO: think about running this hook concurrently with the command
-	hookExecutor.RunOnCommandStartedHook()
+	for _, t := range tasksToRun {
+		hookExecutor.RunOnCommandStartedHook(t.Name)
+	}
 
 	if err := taskExecutor.RunTasks(tasksToRun); err != nil {
 		return handleRunTasksError(err, hookExecutor)

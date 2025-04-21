@@ -7,6 +7,8 @@ const (
 
 	FailedTaskName   = "FailedTaskName"
 	FailedQuorumName = "FailedQuorumName"
+
+	StartedTaskName = "StartedTaskName"
 )
 
 type RepoTemplateVarsData struct {

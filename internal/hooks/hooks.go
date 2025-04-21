@@ -41,7 +41,8 @@ func NewHookExecutor(ctx context.Context, cfg *config.Config, opts HookExecutorO
 	}, nil
 }
 
-func (e *HookExecutor) RunOnCommandStartedHook() error {
+func (e *HookExecutor) RunOnCommandStartedHook(taskname string) error {
+	e.templateVars[templates.StartedTaskName] = taskname
 	if e.hooks.OnCommandStarted != nil {
 		log.Println("Running onStartedSuccess hook")
 		if err := e.executor.Exec(*e.hooks.OnCommandStarted, e.env, e.templateVars); err != nil {

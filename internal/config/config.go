@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/mitchellh/mapstructure"
@@ -42,7 +43,7 @@ type Quorum struct {
 	Name             *string  `mapstructure:"name,omitempty"`
 	MinNumberOfKeys  int      `mapstructure:"minNumberOfKeys" validate:"required,gt=0"`
 	GPGKeys          []string `mapstructure:"gpgKeys"`
-	GPGKeyFilesPaths []string `mapstructure:"gpgKeyPaths"`
+	GPGKeyFilesPaths []string `mapstructure:"gpgKeyPaths" yaml:"gpgKeyPaths"`
 }
 
 type Hooks struct {
@@ -117,7 +118,15 @@ func validateGitRepoPath(repo *GitRepo) error {
 		}
 		return nil
 	default:
-		return fmt.Errorf("invalid Git repository URL: must be SSH (git@...) or HTTPS (https://...)")
+		if err := fileExists(repo.Url); err != nil {
+			return fmt.Errorf("invalid Git repository URL: must be SSH (git@...) or HTTPS (https://...) or local path")
+		}
+		gitDir := filepath.Join(repo.Url, ".git")
+		info, err := os.Stat(gitDir)
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("provided path is not a valid Git repository (missing .git directory)")
+		}
+		return nil
 	}
 }
 
@@ -163,7 +172,11 @@ func validateTasks(tasks []Task) error {
 }
 
 func fileExists(path string) error {
-	_, err := os.Stat(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("error getting absolute path: %w", err)
+	}
+	_, err = os.Stat(absPath)
 	if err != nil {
 		return fmt.Errorf("error stat key file path: %w", err)
 	}
