@@ -33,7 +33,7 @@ Commands can be provided alongside the source code by developers and/or paramete
 
 #### GPG key requirements
 
-- Only RSA encryption is supported for now.
+- Supported key algorithms: RSA and Ed25519 (EdDSA). Other algorithms (DSA, ElGamal) are not supported.
 - Ensure keys are stored securely (e.g., in `~/.gnupg`).
 - Private keys must be encrypted with a password.
 - Public keys must be provided to the administrator.
@@ -44,6 +44,12 @@ Use the following command to generate an RSA4096 GPG key:
 
 ```sh
 gpg --default-new-key-algo rsa4096 --gen-key
+```
+
+Or generate an Ed25519 GPG key:
+
+```sh
+gpg --default-new-key-algo ed25519 --gen-key
 ```
 
 #### Installing the signatures plugin
