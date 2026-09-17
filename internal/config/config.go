@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/go-playground/validator/v10"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
@@ -125,6 +127,54 @@ func validateQuorums(quorums []Quorum) error {
 
 		if err := validateKeyFilePath(q.GPGKeyFilesPaths); err != nil {
 			return err
+		}
+
+		if err := validateGPGKeys(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateGPGKeys makes sure every trusted key is a parseable armored public
+// key. Doing it here surfaces a misconfigured key as a config error instead of
+// a quorum failure (which would also trigger the onQuorumFailure hook).
+func validateGPGKeys(q Quorum) error {
+	name := "<unnamed>"
+	if q.Name != nil {
+		name = *q.Name
+	}
+
+	for i, key := range q.GPGKeys {
+		if err := validateGPGKey(key); err != nil {
+			return fmt.Errorf("quorum %q gpgKeys[%d]: %w", name, i, err)
+		}
+	}
+
+	for i, path := range q.GPGKeyFilesPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("quorum %q gpgKeyPaths[%d]: unable to read key file: %w", name, i, err)
+		}
+		if err := validateGPGKey(string(data)); err != nil {
+			return fmt.Errorf("quorum %q gpgKeyPaths[%d] (%s): %w", name, i, path, err)
+		}
+	}
+
+	return nil
+}
+
+func validateGPGKey(key string) error {
+	entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(key))
+	if err != nil {
+		return fmt.Errorf("invalid GPG public key: %w", err)
+	}
+	if len(entities) == 0 {
+		return fmt.Errorf("invalid GPG public key: no public key found")
+	}
+	for _, e := range entities {
+		if e.PrivateKey != nil {
+			return fmt.Errorf("invalid GPG public key: key %X is a private key", e.PrimaryKey.KeyId)
 		}
 	}
 	return nil

@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 golang:1.23-bookworm@sha256:3149bc5043fa58cf127fd8db1fdd4e533b6aed5a40d663d4f4ae43d20386665f
+FROM --platform=linux/amd64 golang:1.25-bookworm@sha256:3b4a11519ad929d1e1d261a12cff056f0c85b735253d7d861346b9c6f8b36437
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get -y update && \
