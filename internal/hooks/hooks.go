@@ -44,7 +44,7 @@ func NewHookExecutor(ctx context.Context, cfg *config.Config, opts HookExecutorO
 func (e *HookExecutor) RunOnCommandStartedHook(taskname string) error {
 	e.templateVars[templates.StartedTaskName] = taskname
 	if e.hooks.OnCommandStarted != nil {
-		log.Println("Running onStartedSuccess hook")
+		log.Println("Running onCommandStarted hook")
 		if err := e.executor.Exec(*e.hooks.OnCommandStarted, e.env, e.templateVars); err != nil {
 			log.Printf("WARNING onCommandStarted hook execution error: %s\n", err.Error())
 			return err
@@ -80,7 +80,7 @@ func (e *HookExecutor) RunOnCommandSkippedHook() error {
 	if e.hooks.OnCommandSkipped != nil {
 		log.Println("Running onCommandSkipped hook")
 		if err := e.executor.Exec(*e.hooks.OnCommandSkipped, e.env, e.templateVars); err != nil {
-			log.Printf("WARNING onCommandFailure hook execution error: %s", err.Error())
+			log.Printf("WARNING onCommandSkipped hook execution error: %s\n", err.Error())
 			return err
 		}
 	}
@@ -92,7 +92,7 @@ func (e *HookExecutor) RunOnQuorumFailedHook(quorumName string) error {
 	if e.hooks.OnQuorumFailure != nil {
 		log.Println("Running onQuorumFailure hook")
 		if err := e.executor.Exec(*e.hooks.OnQuorumFailure, e.env, e.templateVars); err != nil {
-			log.Printf("WARNING onCommandSkipped hook execution error: %s\n", err.Error())
+			log.Printf("WARNING onQuorumFailure hook execution error: %s\n", err.Error())
 			return err
 		}
 	}

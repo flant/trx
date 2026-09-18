@@ -15,17 +15,11 @@ type StorageService struct {
 }
 
 type StorageOpts struct {
-	Config      *config.Config
-	StorageType string
+	Config *config.Config
 }
 
 func NewStorage(opts *StorageOpts) (*StorageService, error) {
-	switch opts.StorageType {
-	case "local":
-		return &StorageService{storage: local.NewLocalStorage(opts.Config.Repo.Url)}, nil
-	default:
-		return &StorageService{storage: local.NewLocalStorage(opts.Config.Repo.Url)}, nil
-	}
+	return &StorageService{storage: local.NewLocalStorage(opts.Config.Repo.Url)}, nil
 }
 
 func (s *StorageService) CheckTaskLastSucceedTag(taskName string) (string, error) {

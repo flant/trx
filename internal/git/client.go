@@ -90,6 +90,11 @@ func (g *GitClient) Checkout(o *TargetGitObject) error {
 	if err != nil {
 		return fmt.Errorf("checkout error: %w", err)
 	}
+
+	// drop artifacts left by the previous release
+	if err := worktree.Clean(&git.CleanOptions{Dir: true}); err != nil {
+		return fmt.Errorf("clean worktree error: %w", err)
+	}
 	return nil
 }
 
