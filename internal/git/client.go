@@ -19,6 +19,9 @@ import (
 
 type GitClient struct {
 	Repo *git.Repository
+	// allowPrerelease lets pre-release tags be deployed, for a setup that
+	// releases through -rc tags on purpose.
+	allowPrerelease bool
 	// RepoPath is the local clone: the working directory of the commands,
 	// but only once the tag they come from has passed quorum verification.
 	RepoPath string
@@ -36,8 +39,9 @@ func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
 	}
 
 	return &GitClient{
-		Repo:     repo,
-		RepoPath: repoPath,
+		Repo:            repo,
+		RepoPath:        repoPath,
+		allowPrerelease: cfg.AllowPrerelease,
 	}, nil
 }
 
@@ -111,11 +115,20 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 
 	var versions []*semver.Version
 
+	// Pre-releases are skipped unless they are asked for: semver sorts
+	// v2.0.0-rc1 above v1.9.0, so a release candidate would otherwise become
+	// the newest tag and be deployed as a release.
 	err = tagRefs.ForEach(func(ref *plumbing.Reference) error {
-		v, err := semver.NewVersion(ref.Name().Short())
-		if err == nil {
-			versions = append(versions, v)
+		name := ref.Name().Short()
+		v, err := semver.NewVersion(name)
+		if err != nil {
+			return nil
 		}
+		if v.Prerelease() != "" && !g.allowPrerelease {
+			log.Printf("Skipping pre-release tag %s\n", name)
+			return nil
+		}
+		versions = append(versions, v)
 		return nil
 	})
 	if err != nil {

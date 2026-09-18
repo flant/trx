@@ -25,6 +25,7 @@ type GitRepo struct {
 	Url                     string      `mapstructure:"url" validate:"required"`
 	Auth                    GitRepoAuth `mapstructure:"auth"`
 	InitialLastProcessedTag string      `mapstructure:"initialLastProcessedTag"`
+	AllowPrerelease         bool        `mapstructure:"allowPrerelease"`
 	ConfigFile              string      `mapstructure:"configFile"`
 }
 
