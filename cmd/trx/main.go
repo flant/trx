@@ -16,6 +16,7 @@ var (
 	reference           string
 	task                string
 	gitTimeout          time.Duration
+	lockTimeout         time.Duration
 )
 
 type runOptions struct {
@@ -46,6 +47,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.Flags().StringVarP(&reference, "reference", "r", "", "Tag to run on (default: latest tag)")
 	rootCmd.Flags().StringVarP(&task, "task", "t", "", "Name of the task to run. If no name provided use ordinal number e.g. 1,2,3...etc. (default: first task in config)")
 	rootCmd.Flags().DurationVar(&gitTimeout, "git-timeout", 10*time.Minute, "Timeout for cloning and fetching the repository")
+	rootCmd.Flags().DurationVar(&lockTimeout, "lock-timeout", 0, "How long to wait for the execution lock (0 means wait indefinitely)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Println(err)

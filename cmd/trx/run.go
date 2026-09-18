@@ -46,12 +46,17 @@ func run(opts runOptions) error {
 		return err
 	}
 
-	locker := lock.NewManager(lock.NewLocalLocker(disableLock))
-	if err := locker.Acquire(cfg.Repo.Url); err != nil {
-		return fmt.Errorf("lock acquire error: %w", err)
-	}
 	if disableLock {
-		log.Println("Processing without execution lock")
+		log.Println("WARNING processing without execution lock")
+	} else {
+		localLocker, err := lock.NewLocalLocker()
+		if err != nil {
+			return fmt.Errorf("lock init error: %w", err)
+		}
+		log.Printf("Acquiring execution lock for %s\n", cfg.Repo.Url)
+		if err := lock.NewManager(localLocker).Acquire(cfg.Repo.Url, lockTimeout); err != nil {
+			return fmt.Errorf("lock acquire error: %w", err)
+		}
 	}
 
 	gitCtx, cancelGit := context.WithTimeout(ctx, gitTimeout)

@@ -1,22 +1,24 @@
 package lock
 
 import (
+	"fmt"
+
 	lock "github.com/werf/common-go/pkg/lock"
 	"github.com/werf/lockgate"
 )
 
 type Local struct {
-	locker   Locker
-	disabled bool
+	locker Locker
 }
 
-func NewLocalLocker(disabled bool) *Local {
-	locker, _ := lock.HostLocker()
-	return &Local{locker: locker, disabled: disabled}
+func NewLocalLocker() (*Local, error) {
+	locker, err := lock.HostLocker()
+	if err != nil {
+		return nil, fmt.Errorf("unable to init host locker: %w", err)
+	}
+	return &Local{locker: locker}, nil
 }
 
 func (l *Local) Acquire(lockName string, opts lockgate.AcquireOptions) (bool, lockgate.LockHandle, error) {
-	return l.locker.Acquire(lockName, lockgate.AcquireOptions{
-		NonBlocking: l.disabled,
-	})
+	return l.locker.Acquire(lockName, opts)
 }
