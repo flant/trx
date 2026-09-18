@@ -17,8 +17,7 @@ type StorageService struct {
 }
 
 type StorageOpts struct {
-	Config      *config.Config
-	StorageType string
+	Config *config.Config
 }
 
 func NewStorage(opts *StorageOpts) (*StorageService, error) {
