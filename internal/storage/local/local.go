@@ -21,9 +21,9 @@ type Local struct {
 }
 
 func NewLocalStorage(repoUrl string) (*Local, error) {
-	home, err := os.UserHomeDir()
+	home, err := git.HomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("unable to determine home directory: %w", err)
+		return nil, err
 	}
 	repoName := git.RepoNameFromUrl(repoUrl)
 	return &Local{

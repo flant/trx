@@ -27,9 +27,9 @@ func NewRepoConfig(config config.GitRepo) (*RepoConfig, error) {
 		return nil, fmt.Errorf("git url not specified")
 	}
 
-	home, err := os.UserHomeDir()
+	home, err := HomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("unable to determine home directory: %w", err)
+		return nil, err
 	}
 
 	var auth *Auth

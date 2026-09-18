@@ -15,7 +15,9 @@ import (
 )
 
 // stderrTailLimit caps how much stderr is kept in memory for the error message.
-const stderrTailLimit = 64 * 1024
+// Everything is logged as it arrives anyway, this is only the excerpt repeated
+// in the error.
+const stderrTailLimit = 8 * 1024
 
 type Executor struct {
 	Ctx     context.Context
@@ -104,6 +106,10 @@ type excuteOpts struct {
 }
 
 func execute(ctx context.Context, opts *excuteOpts) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	cmd := exec.Command("sh", "-c", opts.cmd)
 	cmd.Dir = opts.wd
 	cmd.Env = append(os.Environ(), opts.env...)
@@ -131,7 +137,7 @@ func execute(ctx context.Context, opts *excuteOpts) error {
 		select {
 		case <-ctx.Done():
 			log.Println("Terminating running command")
-			terminateProcessGroup(cmd)
+			terminateProcessGroup(cmd, done)
 		case <-done:
 		}
 	}()

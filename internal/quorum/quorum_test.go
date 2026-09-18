@@ -14,14 +14,18 @@ func TestDedupeGPGKeys(t *testing.T) {
 	key, err := os.ReadFile("../../trx.asc")
 	require.NoError(t, err)
 
-	keys, distinct, err := dedupeGPGKeys([]string{string(key), string(key)})
+	keys, err := dedupeGPGKeys([]string{string(key), string(key)})
 	require.NoError(t, err)
-	assert.Equal(t, 1, distinct, "the same key listed twice must not count as two")
-	assert.Len(t, keys, 1)
+	assert.Len(t, keys, 1, "the same key listed twice must not count as two")
+
+	// The re-armored key must still be a usable key ring.
+	again, err := dedupeGPGKeys(keys)
+	require.NoError(t, err)
+	assert.Len(t, again, 1)
 }
 
 func TestDedupeGPGKeysInvalid(t *testing.T) {
-	_, _, err := dedupeGPGKeys([]string{"not a key"})
+	_, err := dedupeGPGKeys([]string{"not a key"})
 	assert.Error(t, err)
 }
 

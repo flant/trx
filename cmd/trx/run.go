@@ -33,12 +33,17 @@ func run(opts runOptions) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	signalChan := make(chan os.Signal, 1)
+	signalChan := make(chan os.Signal, 2)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-signalChan
-		log.Printf("Received signal: %s", sig)
+		log.Printf("Received signal: %s, terminating", sig)
 		cancel()
+		// Hooks keep running on an uncancelled context so that they can still
+		// report. A second signal gives up on them.
+		sig = <-signalChan
+		log.Printf("Received signal: %s, exiting immediately", sig)
+		os.Exit(1)
 	}()
 
 	cfg, err := config.NewConfig(configPath)
@@ -53,8 +58,12 @@ func run(opts runOptions) error {
 		if err != nil {
 			return fmt.Errorf("lock init error: %w", err)
 		}
-		log.Printf("Acquiring execution lock for %s\n", cfg.Repo.Url)
-		if err := lock.NewManager(localLocker).Acquire(cfg.Repo.Url, lockTimeout); err != nil {
+		// Lock on the same key the clone and the state directory are derived
+		// from, so that two configs pointing at one repository over different
+		// protocols do not run concurrently on the same clone.
+		lockName := git.RepoNameFromUrl(cfg.Repo.Url)
+		log.Printf("Acquiring execution lock for %s\n", lockName)
+		if err := lock.NewManager(localLocker).Acquire(lockName, lockTimeout); err != nil {
 			return fmt.Errorf("lock acquire error: %w", err)
 		}
 	}
@@ -156,7 +165,7 @@ func handleRunTasksError(err error, hookExecutor *hooks.HookExecutor) error {
 			return fmt.Errorf("task %s succeeded, but the last processed tag was not stored, it will run again on the next poll: %w", runErr.TaskName, runErr)
 
 		default:
-			return fmt.Errorf("task running error: %w", runErr.Err)
+			return fmt.Errorf("task running error: %w", runErr)
 		}
 	}
 	return fmt.Errorf("tasks running error: %w", err)

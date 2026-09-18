@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
+	"os/user"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -25,6 +27,24 @@ func VerifyTagSignatures(repo *git.Repository, r VerifyTagSignaturesRequest) err
 		return fmt.Errorf("unable to verify tag signatures: %w", err)
 	}
 	return nil
+}
+
+// HomeDir returns the directory trx keeps its clones and state in. $HOME is
+// preferred, because a static binary running under a uid that is missing from
+// /etc/passwd (the usual case for runAsUser in Kubernetes) cannot look itself
+// up, but the passwd entry is still used when $HOME is not set.
+func HomeDir() (string, error) {
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return home, nil
+	}
+	usr, err := user.Current()
+	if err != nil {
+		return "", fmt.Errorf("unable to determine home directory: %w", err)
+	}
+	if usr.HomeDir == "" {
+		return "", fmt.Errorf("unable to determine home directory: user %s has no home directory", usr.Username)
+	}
+	return usr.HomeDir, nil
 }
 
 func RepoNameFromUrl(repoUrl string) string {
@@ -52,7 +72,11 @@ func toDottedName(s string) string {
 	s = strings.TrimPrefix(s, "/")
 	s = strings.TrimSuffix(s, "/")
 	parts := strings.Split(s, "/")
-	return strings.Join(parts, ".")
+	name := strings.Join(parts, ".")
+	// The result is used as a single path element, it must not contain a
+	// separator of its own.
+	name = strings.ReplaceAll(name, string(os.PathSeparator), ".")
+	return strings.ReplaceAll(name, "..", ".")
 }
 
 func IsNewerVersion(current, last, initial string) (bool, error) {

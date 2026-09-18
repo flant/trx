@@ -18,6 +18,9 @@ import (
 	"trx/internal/config"
 )
 
+// maxTagDepth bounds how many nested tag objects are followed when peeling.
+const maxTagDepth = 10
+
 type GitClient struct {
 	Repo     *git.Repository
 	RepoPath string
@@ -133,15 +136,20 @@ func (g *GitClient) GetSpecificTag(tag string) (*TargetGitObject, error) {
 	}, nil
 }
 
-// peel resolves an annotated tag object to the commit it points at. A
-// lightweight tag already points at the commit and is returned as is.
+// peel resolves an annotated tag object to the commit it points at, following
+// a chain of tags pointing at tags. A lightweight tag already points at the
+// commit and is returned as is.
 func (g *GitClient) peel(hash plumbing.Hash) plumbing.Hash {
-	obj, err := g.Repo.Object(plumbing.TagObject, hash)
-	if err != nil {
-		return hash
-	}
-	if annotatedTag, ok := obj.(*object.Tag); ok {
-		return annotatedTag.Target
+	for range maxTagDepth {
+		obj, err := g.Repo.Object(plumbing.TagObject, hash)
+		if err != nil {
+			return hash
+		}
+		annotatedTag, ok := obj.(*object.Tag)
+		if !ok {
+			return hash
+		}
+		hash = annotatedTag.Target
 	}
 	return hash
 }
@@ -172,8 +180,8 @@ func openGitRepo(ctx context.Context, r *RepoConfig) (*git.Repository, error) {
 			gitconfig.RefSpec("refs/tags/*:refs/tags/*"),
 		},
 		// Prune drops tags deleted upstream, which otherwise keep winning tag
-		// selection forever. Updates are not forced: a tag moved upstream must
-		// not silently replace the local one.
+		// selection forever. A tag moved upstream is adopted (go-git updates tag
+		// refs regardless of Force) and re-verified by the quorum check.
 		Prune: true,
 	}
 	if r.Auth != nil {
@@ -195,6 +203,7 @@ func cloneGitRepo(ctx context.Context, r *RepoConfig) (*git.Repository, error) {
 	if err := os.MkdirAll(parentDir, 0o755); err != nil {
 		return nil, fmt.Errorf("unable to create %s: %w", parentDir, err)
 	}
+	removeStaleClones(parentDir)
 	tmpDir, err := os.MkdirTemp(parentDir, ".clone-")
 	if err != nil {
 		return nil, fmt.Errorf("unable to create temporary clone directory: %w", err)
@@ -229,9 +238,24 @@ func hasOrigin(repo *git.Repository, url string) bool {
 		return false
 	}
 	for _, u := range remote.Config().URLs {
-		if u == url {
+		// Compared by repository identity, so that the same repository reached
+		// over ssh and https keeps using one clone.
+		if u == url || RepoNameFromUrl(u) == RepoNameFromUrl(url) {
 			return true
 		}
 	}
 	return false
+}
+
+// removeStaleClones drops leftovers of clones interrupted by a hard kill.
+func removeStaleClones(parentDir string) {
+	leftovers, err := filepath.Glob(filepath.Join(parentDir, ".clone-*"))
+	if err != nil {
+		return
+	}
+	for _, dir := range leftovers {
+		if err := os.RemoveAll(dir); err != nil {
+			log.Printf("WARNING unable to remove stale clone %s: %s\n", dir, err)
+		}
+	}
 }

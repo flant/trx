@@ -16,7 +16,11 @@ func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-func terminateProcessGroup(cmd *exec.Cmd) {
+// terminateProcessGroup signals the group and escalates to SIGKILL unless the
+// command finishes first. done must be closed when the command was reaped,
+// otherwise the pid may be reused by then and the SIGKILL would hit a
+// different process group.
+func terminateProcessGroup(cmd *exec.Cmd, done <-chan struct{}) {
 	if cmd.Process == nil {
 		return
 	}
@@ -28,7 +32,9 @@ func terminateProcessGroup(cmd *exec.Cmd) {
 		log.Printf("unable to terminate process group %d: %s", pgid, err)
 		return
 	}
-	time.AfterFunc(killGracePeriod, func() {
+	select {
+	case <-done:
+	case <-time.After(killGracePeriod):
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-	})
+	}
 }

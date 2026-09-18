@@ -62,6 +62,7 @@ var (
 	ErrNoNewVersion     = errors.New("no new version")
 	ErrExcutionFailed   = errors.New("error running task")
 	ErrStateStoreFailed = errors.New("task succeeded but storing the last processed tag failed")
+	ErrStateReadFailed  = errors.New("unable to read the last processed tag")
 )
 
 func (e *Error) Error() string {
@@ -114,7 +115,17 @@ func (e *TaskExecutorForced) RunTasks(tasks []Task) error {
 func (e *TaskExecutor) RunTasks(tasks []Task) error {
 	for _, t := range tasks {
 
-		if err := t.checkIfNewVersion(e.storage); err != nil {
+		isNew, err := t.isNewVersion(e.storage)
+		if err != nil {
+			// A state file that cannot be read or parsed must not look like
+			// "nothing to do": that hides a wedged deployment behind exit 0.
+			return &Error{
+				TaskName:   t.Name,
+				Err:        ErrStateReadFailed,
+				ErrMessage: err.Error(),
+			}
+		}
+		if !isNew {
 			return &Error{
 				TaskName: t.Name,
 				Err:      ErrNoNewVersion,
@@ -157,19 +168,16 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%02dm:%02ds:%03dms", minutes, seconds, millis)
 }
 
-func (t *Task) checkIfNewVersion(storage Storage) error {
+func (t *Task) isNewVersion(storage Storage) (bool, error) {
 	lastSucceedTag, err := storage.CheckTaskLastSucceedTag(t.Name)
 	if err != nil {
-		return fmt.Errorf("check last published commit error: %w", err)
+		return false, fmt.Errorf("check last processed tag error: %w", err)
 	}
 	isNewVersion, err := git.IsNewerVersion(t.Version, lastSucceedTag, t.InitialVersion)
 	if err != nil {
-		return fmt.Errorf("can't check if tag is new: %w", err)
+		return false, fmt.Errorf("can't check if tag is new: %w", err)
 	}
-	if !isNewVersion {
-		return fmt.Errorf("no new version")
-	}
-	return nil
+	return isNewVersion, nil
 }
 
 type GetTasksToRunOpts struct {

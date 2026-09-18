@@ -1,6 +1,7 @@
 package quorum
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/armor"
 	"golang.org/x/sync/errgroup"
 
 	"trx/internal/config"
@@ -64,14 +66,14 @@ func checkQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 				return &Error{QuorumName: name, Err: fmt.Errorf("error reading GPG keys: %w", err)}
 			}
 
-			keys, distinct, err := dedupeGPGKeys(keys)
+			keys, err = dedupeGPGKeys(keys)
 			if err != nil {
 				return &Error{QuorumName: name, Err: err}
 			}
-			if distinct < q.MinNumberOfKeys {
+			if len(keys) < q.MinNumberOfKeys {
 				return &Error{QuorumName: name, Err: fmt.Errorf(
 					"number of distinct GPG keys is less than minNumberOfKeys. distinct: %d, minimum number: %d",
-					distinct, q.MinNumberOfKeys)}
+					len(keys), q.MinNumberOfKeys)}
 			}
 
 			err = trdlGit.VerifyTagSignatures(repo, trdlGit.VerifyTagSignaturesRequest{
@@ -108,47 +110,53 @@ func parseGPGKeys(plain, files []string) ([]string, error) {
 	return append(res, plain...), nil
 }
 
-// dedupeGPGKeys drops key entries that hold no primary key fingerprint not seen
-// before, so that the same key listed twice cannot satisfy a quorum of two. It
-// returns the deduplicated entries and the number of distinct fingerprints.
-func dedupeGPGKeys(keys []string) ([]string, int, error) {
+// dedupeGPGKeys splits every key entry into one entry per key and drops keys
+// already seen, so that the same key listed twice cannot satisfy a quorum of
+// two: verification counts entries and removes only the entry that matched.
+// It returns one entry per distinct key.
+func dedupeGPGKeys(keys []string) ([]string, error) {
 	seen := make(map[string]bool)
 	var res []string
 	for _, key := range keys {
-		fingerprints, err := keyFingerprints(key)
+		entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(key))
 		if err != nil {
-			return nil, 0, err
+			return nil, fmt.Errorf("unable to parse GPG key: %w", err)
 		}
-		var isNew bool
-		for _, fp := range fingerprints {
-			if !seen[fp] {
-				seen[fp] = true
-				isNew = true
-			}
-		}
-		if isNew {
-			res = append(res, key)
-		} else {
-			log.Printf("WARNING duplicate GPG key %s is ignored\n", strings.Join(fingerprints, ", "))
-		}
-	}
-	return res, len(seen), nil
-}
-
-func keyFingerprints(key string) ([]string, error) {
-	entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(key))
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse GPG key: %w", err)
-	}
-	if len(entities) == 0 {
-		return nil, fmt.Errorf("no public key found in GPG key entry")
-	}
-	var fingerprints []string
-	for _, e := range entities {
-		if e.PrimaryKey == nil {
+		if len(entities) == 0 {
 			return nil, fmt.Errorf("no public key found in GPG key entry")
 		}
-		fingerprints = append(fingerprints, hex.EncodeToString(e.PrimaryKey.Fingerprint[:]))
+		for _, entity := range entities {
+			if entity.PrimaryKey == nil {
+				return nil, fmt.Errorf("no public key found in GPG key entry")
+			}
+			fingerprint := hex.EncodeToString(entity.PrimaryKey.Fingerprint[:])
+			if seen[fingerprint] {
+				log.Printf("WARNING duplicate GPG key %s is ignored\n", fingerprint)
+				continue
+			}
+			seen[fingerprint] = true
+
+			armored, err := armorEntity(entity)
+			if err != nil {
+				return nil, fmt.Errorf("unable to read GPG key %s: %w", fingerprint, err)
+			}
+			res = append(res, armored)
+		}
 	}
-	return fingerprints, nil
+	return res, nil
+}
+
+func armorEntity(entity *openpgp.Entity) (string, error) {
+	var buf bytes.Buffer
+	w, err := armor.Encode(&buf, openpgp.PublicKeyType, nil)
+	if err != nil {
+		return "", err
+	}
+	if err := entity.Serialize(w); err != nil {
+		return "", err
+	}
+	if err := w.Close(); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }

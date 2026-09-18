@@ -11,7 +11,7 @@ import (
 // killed. Use a job object if trx ever has to manage Windows workloads.
 func setProcessGroup(cmd *exec.Cmd) {}
 
-func terminateProcessGroup(cmd *exec.Cmd) {
+func terminateProcessGroup(cmd *exec.Cmd, _ <-chan struct{}) {
 	if cmd.Process == nil {
 		return
 	}
