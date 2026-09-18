@@ -70,9 +70,10 @@ func run(opts runOptions) error {
 		RepoCommit: gitTargetObject.Commit,
 	})
 
-	hookExecutor, err := hooks.NewHookExecutor(ctx, cfg, hooks.HookExecutorOptions{
+	// Hooks get their own context: they must still be able to report after the
+	// run context was cancelled by SIGTERM.
+	hookExecutor, err := hooks.NewHookExecutor(context.Background(), cfg, hooks.HookExecutorOptions{
 		TemplateVars: repoTemplatevars,
-		WorkDir:      gitClient.RepoPath,
 	})
 	if err != nil {
 		return fmt.Errorf("hooks executor error: %w", err)
@@ -117,14 +118,14 @@ func run(opts runOptions) error {
 
 	// TODO: think about running this hook concurrently with the command
 	for _, t := range tasksToRun {
-		hookExecutor.RunOnCommandStartedHook(t.Name)
+		_ = hookExecutor.RunOnCommandStartedHook(t.Name)
 	}
 
 	if err := taskExecutor.RunTasks(tasksToRun); err != nil {
 		return handleRunTasksError(err, hookExecutor)
 	}
 
-	hookExecutor.RunOnCommandSuccessHook()
+	_ = hookExecutor.RunOnCommandSuccessHook()
 	return nil
 }
 
@@ -133,12 +134,12 @@ func handleRunTasksError(err error, hookExecutor *hooks.HookExecutor) error {
 	if errors.As(err, &runErr) {
 		switch {
 		case errors.Is(runErr.Err, tasks.ErrNoNewVersion):
-			hookExecutor.RunOnCommandSkippedHook()
+			_ = hookExecutor.RunOnCommandSkippedHook()
 			log.Printf("task %s skipped: no new version detected\n", runErr.TaskName)
 			return nil
 
 		case errors.Is(runErr.Err, tasks.ErrExcutionFailed):
-			hookExecutor.RunOnCommandFailureHook(runErr.TaskName)
+			_ = hookExecutor.RunOnCommandFailureHook(runErr.TaskName)
 			return fmt.Errorf("task %s failed: %w", runErr.TaskName, runErr)
 
 		case errors.Is(runErr.Err, tasks.ErrStateStoreFailed):

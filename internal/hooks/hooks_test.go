@@ -3,10 +3,11 @@ package hooks
 import (
 	"context"
 	"testing"
-	"trx/internal/config"
-	"trx/internal/templates"
 
 	"github.com/stretchr/testify/assert"
+
+	"trx/internal/config"
+	"trx/internal/templates"
 )
 
 func TestRunHooks(t *testing.T) {
@@ -17,14 +18,12 @@ func TestRunHooks(t *testing.T) {
 	})
 	hookExecutor, err := NewHookMockExecutor(context.Background(), &config.Config{
 		Hooks: config.Hooks{
-
 			Env:              map[string]string{"ENV": "test"},
 			OnCommandStarted: &[]string{"commit: {{ .RepoCommit }}, tag: {{ .RepoTag }}, url: {{ .RepoUrl }}"},
 			OnCommandFailure: &[]string{`T_FAILED -- {{ .FailedTaskName }}`},
 		},
 	}, HookExecutorOptions{
 		TemplateVars: repoTemplatevars,
-		WorkDir:      "/tmp",
 	})
 	assert.NoError(t, err)
 

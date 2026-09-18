@@ -23,13 +23,15 @@ type HookExecutor struct {
 
 type HookExecutorOptions struct {
 	TemplateVars map[string]string
-	WorkDir      string
 }
 
+// NewHookExecutor builds an executor that runs hooks in trx's own working
+// directory. Hooks must never run in the repository worktree: onQuorumFailure
+// would then execute in a checkout that failed verification.
 func NewHookExecutor(ctx context.Context, cfg *config.Config, opts HookExecutorOptions) (*HookExecutor, error) {
 	env := getEnv(cfg)
 	hooks := cfg.Hooks
-	e, err := executor.NewExecutor(ctx, opts.WorkDir)
+	e, err := executor.NewExecutor(ctx, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create executor: %v", err)
 	}
@@ -44,7 +46,7 @@ func NewHookExecutor(ctx context.Context, cfg *config.Config, opts HookExecutorO
 func (e *HookExecutor) RunOnCommandStartedHook(taskname string) error {
 	e.templateVars[templates.StartedTaskName] = taskname
 	if e.hooks.OnCommandStarted != nil {
-		log.Println("Running onStartedSuccess hook")
+		log.Println("Running onCommandStarted hook")
 		if err := e.executor.Exec(*e.hooks.OnCommandStarted, e.env, e.templateVars); err != nil {
 			log.Printf("WARNING onCommandStarted hook execution error: %s\n", err.Error())
 			return err
@@ -80,7 +82,7 @@ func (e *HookExecutor) RunOnCommandSkippedHook() error {
 	if e.hooks.OnCommandSkipped != nil {
 		log.Println("Running onCommandSkipped hook")
 		if err := e.executor.Exec(*e.hooks.OnCommandSkipped, e.env, e.templateVars); err != nil {
-			log.Printf("WARNING onCommandFailure hook execution error: %s", err.Error())
+			log.Printf("WARNING onCommandSkipped hook execution error: %s\n", err.Error())
 			return err
 		}
 	}
@@ -92,7 +94,7 @@ func (e *HookExecutor) RunOnQuorumFailedHook(quorumName string) error {
 	if e.hooks.OnQuorumFailure != nil {
 		log.Println("Running onQuorumFailure hook")
 		if err := e.executor.Exec(*e.hooks.OnQuorumFailure, e.env, e.templateVars); err != nil {
-			log.Printf("WARNING onCommandSkipped hook execution error: %s\n", err.Error())
+			log.Printf("WARNING onQuorumFailure hook execution error: %s\n", err.Error())
 			return err
 		}
 	}

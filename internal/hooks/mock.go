@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 	"fmt"
+
 	"trx/internal/config"
 	"trx/internal/executor"
 )
@@ -10,7 +11,7 @@ import (
 func NewHookMockExecutor(ctx context.Context, cfg *config.Config, opts HookExecutorOptions) (*HookExecutor, error) {
 	env := getEnv(cfg)
 	hooks := cfg.Hooks
-	e, err := executor.NewMockExecutor(ctx, opts.WorkDir)
+	e, err := executor.NewMockExecutor(ctx, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create executor: %v", err)
 	}
