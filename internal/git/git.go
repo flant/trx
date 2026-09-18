@@ -71,11 +71,6 @@ func IsNewerVersion(current, last, initial string) (bool, error) {
 			log.Printf("WARN current tag %s is less than or equal to initial tag %s", current, initial)
 			return false, nil
 		}
-
-		if currentVer.Equal(initialVer) && last == "" {
-			log.Println("WARN current tag matches initial tag. Skipping as not newer.")
-			return false, nil
-		}
 	}
 
 	if last == "" {

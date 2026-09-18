@@ -54,7 +54,9 @@ func run(opts runOptions) error {
 		log.Println("Processing without execution lock")
 	}
 
-	gitClient, err := git.NewGitClient(*cfg.Repo)
+	gitCtx, cancelGit := context.WithTimeout(ctx, gitTimeout)
+	defer cancelGit()
+	gitClient, err := git.NewGitClient(gitCtx, *cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("new git client error: %w", err)
 	}

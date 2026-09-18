@@ -3,7 +3,6 @@ package git
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
@@ -28,47 +27,45 @@ func NewRepoConfig(config config.GitRepo) (*RepoConfig, error) {
 		return nil, fmt.Errorf("git url not specified")
 	}
 
-	usr, err := user.Current()
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to determine home directory: %w", err)
 	}
 
+	var auth *Auth
 	if config.Auth.BasicAuth != nil {
-		auth, err := newBasicAuth(config.Auth.BasicAuth.Username, config.Auth.BasicAuth.Password)
+		auth = newBasicAuth(config.Auth.BasicAuth.Username, config.Auth.BasicAuth.Password)
+	} else {
+		auth, err = newSshAuth(config.Auth.SshKeyPath, config.Auth.SshKeyPassword)
 		if err != nil {
 			return nil, err
 		}
-		return &RepoConfig{
-			Url:  config.Url,
-			Auth: auth,
-		}, nil
 	}
 
-	auth, err := newSshAuth(config.Auth.SshKeyPath, config.Auth.SshKeyPassword)
-	if err != nil {
-		return nil, err
-	}
 	return &RepoConfig{
 		Url:      config.Url,
 		Auth:     auth,
-		RepoPath: filepath.Join(usr.HomeDir, ".trx", RepoNameFromUrl(config.Url)),
+		RepoPath: filepath.Join(home, ".trx", RepoNameFromUrl(config.Url)),
 	}, nil
 }
 
-func newBasicAuth(username, password string) (*Auth, error) {
+func newBasicAuth(username, password string) *Auth {
 	return &Auth{
 		AuthMethod: &http.BasicAuth{
 			Username: username,
 			Password: password,
 		},
-	}, nil
+	}
 }
 
 func newSshAuth(key, password string) (*Auth, error) {
 	if key == "" {
 		return nil, nil
 	}
-	sshKey, _ := os.ReadFile(key)
+	sshKey, err := os.ReadFile(key)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read ssh key %s: %w", key, err)
+	}
 	publicKey, err := ssh.NewPublicKeys("git", sshKey, password)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get ssh public key: %w", err)

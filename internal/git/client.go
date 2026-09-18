@@ -1,10 +1,12 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/Masterminds/semver/v3"
@@ -21,13 +23,13 @@ type GitClient struct {
 	RepoPath string
 }
 
-func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
+func NewGitClient(ctx context.Context, cfg config.GitRepo) (*GitClient, error) {
 	repoConf, err := NewRepoConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("new repo config error: %w", err)
 	}
 
-	repo, err := openGitRepo(repoConf)
+	repo, err := openGitRepo(ctx, repoConf)
 	if err != nil {
 		return nil, fmt.Errorf("open git repo error: %w", err)
 	}
@@ -44,8 +46,7 @@ func (g *GitClient) GetTargetGitObject(t string) (*TargetGitObject, error) {
 		return nil, fmt.Errorf("get tag info error: %w", err)
 	}
 
-	err = g.Checkout(to)
-	if err != nil {
+	if err := g.Checkout(to); err != nil {
 		return nil, fmt.Errorf("checkout error: %w", err)
 	}
 	return to, nil
@@ -64,27 +65,14 @@ type TargetGitObject struct {
 }
 
 func (g *GitClient) Checkout(o *TargetGitObject) error {
-	log.Printf("Got last tag %s. Perform checkout\n", o.Tag)
-	tagRef, err := g.Repo.Tag(o.Tag)
-	if err != nil {
-		return fmt.Errorf("tag not found: %w", err)
-	}
-	tagHash := tagRef.Hash()
-	tagObj, err := g.Repo.Object(plumbing.TagObject, tagHash)
-	if err == nil {
-		annotatedTag, ok := tagObj.(*object.Tag)
-		if ok {
-			tagHash = annotatedTag.Target
-		}
-	}
-
+	log.Printf("Checking out tag %s (%s)\n", o.Tag, o.Commit)
 	worktree, err := g.Repo.Worktree()
 	if err != nil {
 		return fmt.Errorf("unable to get worktree: %w", err)
 	}
 
 	err = worktree.Checkout(&git.CheckoutOptions{
-		Hash:  tagHash,
+		Hash:  plumbing.NewHash(o.Commit),
 		Force: true,
 	})
 	if err != nil {
@@ -130,7 +118,7 @@ func (g *GitClient) GetLastSemverTag() (*TargetGitObject, error) {
 
 	return &TargetGitObject{
 		Tag:    lastTag,
-		Commit: ref.Hash().String(),
+		Commit: g.peel(ref.Hash()).String(),
 	}, nil
 }
 
@@ -141,44 +129,107 @@ func (g *GitClient) GetSpecificTag(tag string) (*TargetGitObject, error) {
 	}
 	return &TargetGitObject{
 		Tag:    tag,
-		Commit: ref.Hash().String(),
+		Commit: g.peel(ref.Hash()).String(),
 	}, nil
 }
 
-func openGitRepo(r *RepoConfig) (*git.Repository, error) {
-	var repo *git.Repository
-	if _, err := os.Stat(r.RepoPath); os.IsNotExist(err) {
-		cloneOptions := &git.CloneOptions{URL: r.Url}
-		if r.Auth != nil {
-			cloneOptions.Auth = r.Auth.AuthMethod
-		}
+// peel resolves an annotated tag object to the commit it points at. A
+// lightweight tag already points at the commit and is returned as is.
+func (g *GitClient) peel(hash plumbing.Hash) plumbing.Hash {
+	obj, err := g.Repo.Object(plumbing.TagObject, hash)
+	if err != nil {
+		return hash
+	}
+	if annotatedTag, ok := obj.(*object.Tag); ok {
+		return annotatedTag.Target
+	}
+	return hash
+}
 
-		log.Printf("Cloning %s into %s\n", r.Url, r.RepoPath)
-		repo, err = git.PlainClone(r.RepoPath, false, cloneOptions)
-		if err != nil {
-			return nil, fmt.Errorf("unable to clone repo: %w", err)
+func openGitRepo(ctx context.Context, r *RepoConfig) (*git.Repository, error) {
+	repo, err := git.PlainOpen(r.RepoPath)
+	switch {
+	case err != nil:
+		if !errors.Is(err, git.ErrRepositoryNotExists) {
+			log.Printf("WARNING unable to open existing clone %s (%s), cloning anew\n", r.RepoPath, err)
 		}
-		log.Println("Cloning done")
-	} else {
-		repo, err = git.PlainOpen(r.RepoPath)
+		repo, err = cloneGitRepo(ctx, r)
 		if err != nil {
-			return nil, fmt.Errorf("unable to open repo: %w", err)
+			return nil, err
+		}
+	case !hasOrigin(repo, r.Url):
+		log.Printf("WARNING clone %s does not point at %s, cloning anew\n", r.RepoPath, r.Url)
+		repo, err = cloneGitRepo(ctx, r)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	log.Println("Fetching tags")
 	fetchOptions := &git.FetchOptions{
+		RemoteName: git.DefaultRemoteName,
 		RefSpecs: []gitconfig.RefSpec{
 			gitconfig.RefSpec("refs/tags/*:refs/tags/*"),
 		},
+		Prune: true,
+		Force: true,
 	}
 	if r.Auth != nil {
 		fetchOptions.Auth = r.Auth.AuthMethod
 	}
-	err := repo.Fetch(fetchOptions)
+	err = repo.FetchContext(ctx, fetchOptions)
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil, fmt.Errorf("unable to fetch tags: %w", err)
 	}
 
 	return repo, nil
+}
+
+// cloneGitRepo clones into a temporary directory next to the target and renames
+// it into place, so that an interrupted clone never leaves a broken repository
+// behind.
+func cloneGitRepo(ctx context.Context, r *RepoConfig) (*git.Repository, error) {
+	parentDir := filepath.Dir(r.RepoPath)
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		return nil, fmt.Errorf("unable to create %s: %w", parentDir, err)
+	}
+	tmpDir, err := os.MkdirTemp(parentDir, ".clone-")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create temporary clone directory: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cloneDir := filepath.Join(tmpDir, "repo")
+	cloneOptions := &git.CloneOptions{URL: r.Url}
+	if r.Auth != nil {
+		cloneOptions.Auth = r.Auth.AuthMethod
+	}
+
+	log.Printf("Cloning %s into %s\n", r.Url, r.RepoPath)
+	if _, err := git.PlainCloneContext(ctx, cloneDir, false, cloneOptions); err != nil {
+		return nil, fmt.Errorf("unable to clone repo: %w", err)
+	}
+
+	if err := os.RemoveAll(r.RepoPath); err != nil {
+		return nil, fmt.Errorf("unable to remove %s: %w", r.RepoPath, err)
+	}
+	if err := os.Rename(cloneDir, r.RepoPath); err != nil {
+		return nil, fmt.Errorf("unable to move clone into %s: %w", r.RepoPath, err)
+	}
+	log.Println("Cloning done")
+
+	return git.PlainOpen(r.RepoPath)
+}
+
+func hasOrigin(repo *git.Repository, url string) bool {
+	remote, err := repo.Remote(git.DefaultRemoteName)
+	if err != nil {
+		return false
+	}
+	for _, u := range remote.Config().URLs {
+		if u == url {
+			return true
+		}
+	}
+	return false
 }

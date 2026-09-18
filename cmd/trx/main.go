@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -14,6 +15,7 @@ var (
 	disableQuorumsCheck bool
 	reference           string
 	task                string
+	gitTimeout          time.Duration
 )
 
 type runOptions struct {
@@ -43,6 +45,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.Flags().BoolVarP(&disableQuorumsCheck, "disable-quorums-check", "", false, "Run without checking quorums")
 	rootCmd.Flags().StringVarP(&reference, "reference", "r", "", "Tag to run on (default: latest tag)")
 	rootCmd.Flags().StringVarP(&task, "task", "t", "", "Name of the task to run. If no name provided use ordinal number e.g. 1,2,3...etc. (default: first task in config)")
+	rootCmd.Flags().DurationVar(&gitTimeout, "git-timeout", 10*time.Minute, "Timeout for cloning and fetching the repository")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Println(err)
