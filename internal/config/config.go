@@ -145,10 +145,7 @@ func validateQuorums(quorums []Quorum) error {
 // duplicated entry lets a single key holder satisfy minNumberOfKeys > 1. An
 // entry holding several keys still counts as one, for the same reason.
 func validateGPGKeys(q Quorum) (int, error) {
-	name := "<unnamed>"
-	if q.Name != nil {
-		name = *q.Name
-	}
+	name := q.DisplayName()
 
 	keys, err := q.AllGPGKeys()
 	if err != nil {
@@ -170,6 +167,15 @@ func validateGPGKeys(q Quorum) (int, error) {
 	}
 
 	return len(keys), nil
+}
+
+// DisplayName names the quorum in logs and errors. The name is optional in the
+// config, and dereferencing it unconditionally used to panic mid-run.
+func (q Quorum) DisplayName() string {
+	if q.Name == nil {
+		return "<unnamed>"
+	}
+	return *q.Name
 }
 
 // AllGPGKeys returns the trusted keys of the quorum: the inline ones and the
