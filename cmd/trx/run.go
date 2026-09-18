@@ -188,12 +188,17 @@ func failedTagID(t *git.TargetGitObject) string {
 	return t.Tag + " " + t.Commit
 }
 
+// generateCmdVars predefines every documented variable, including the ones
+// filled in later for a single hook: rendering fails on an unknown variable, so
+// a shared env value mentioning FailedQuorumName would otherwise break every
+// hook but one.
 func generateCmdVars(cfg *config.Config, t *git.TargetGitObject) map[string]string {
-	vars := make(map[string]string)
-	vars["RepoTag"] = t.Tag
-	vars["RepoUrl"] = cfg.Repo.Url
-	vars["RepoCommit"] = t.Commit
-	return vars
+	return map[string]string{
+		"RepoTag":          t.Tag,
+		"RepoUrl":          cfg.Repo.Url,
+		"RepoCommit":       t.Commit,
+		"FailedQuorumName": "",
+	}
 }
 
 // mergeEnvs merges the environment of the repository config with the operator
