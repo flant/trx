@@ -18,7 +18,7 @@ func TestRunHooks(t *testing.T) {
 	})
 	hookExecutor, err := NewHookMockExecutor(context.Background(), &config.Config{
 		Hooks: config.Hooks{
-			Env:              map[string]string{"ENV": "test"},
+			Env:              map[string]string{"ENV": "test", "MSG": "task {{ .FailedTaskName }} failed"},
 			OnCommandStarted: &[]string{"commit: {{ .RepoCommit }}, tag: {{ .RepoTag }}, url: {{ .RepoUrl }}"},
 			OnCommandFailure: &[]string{`T_FAILED -- {{ .FailedTaskName }}`},
 		},
