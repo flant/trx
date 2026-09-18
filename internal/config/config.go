@@ -145,23 +145,40 @@ func validateGPGKeys(q Quorum) error {
 		name = *q.Name
 	}
 
-	for i, key := range q.GPGKeys {
-		if err := validateGPGKey(key); err != nil {
-			return fmt.Errorf("quorum %q gpgKeys[%d]: %w", name, i, err)
-		}
+	keys, err := q.AllGPGKeys()
+	if err != nil {
+		return fmt.Errorf("quorum %q %w", name, err)
 	}
 
-	for i, path := range q.GPGKeyFilesPaths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("quorum %q gpgKeyPaths[%d]: unable to read key file: %w", name, i, err)
-		}
-		if err := validateGPGKey(string(data)); err != nil {
-			return fmt.Errorf("quorum %q gpgKeyPaths[%d] (%s): %w", name, i, path, err)
+	for i, key := range keys {
+		if err := validateGPGKey(key); err != nil {
+			return fmt.Errorf("quorum %q %s: %w", name, q.gpgKeySource(i), err)
 		}
 	}
 
 	return nil
+}
+
+// AllGPGKeys returns the trusted keys of the quorum: the inline ones and the
+// contents of every gpgKeyPaths file.
+func (q Quorum) AllGPGKeys() ([]string, error) {
+	keys := make([]string, 0, len(q.GPGKeys)+len(q.GPGKeyFilesPaths))
+	for i, path := range q.GPGKeyFilesPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("gpgKeyPaths[%d]: unable to read key file: %w", i, err)
+		}
+		keys = append(keys, string(data))
+	}
+	return append(keys, q.GPGKeys...), nil
+}
+
+// gpgKeySource names the config field a key from AllGPGKeys came from.
+func (q Quorum) gpgKeySource(i int) string {
+	if i < len(q.GPGKeyFilesPaths) {
+		return fmt.Sprintf("gpgKeyPaths[%d] (%s)", i, q.GPGKeyFilesPaths[i])
+	}
+	return fmt.Sprintf("gpgKeys[%d]", i-len(q.GPGKeyFilesPaths))
 }
 
 func validateGPGKey(key string) error {
