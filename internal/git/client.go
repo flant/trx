@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
@@ -27,13 +29,13 @@ type GitClient struct {
 	RepoPath string
 }
 
-func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
+func NewGitClient(ctx context.Context, cfg config.GitRepo) (*GitClient, error) {
 	repoConf, err := NewRepoConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("new repo config error: %w", err)
 	}
 
-	repo, repoPath, err := openGitRepo(repoConf)
+	repo, repoPath, err := openGitRepo(ctx, repoConf)
 	if err != nil {
 		return nil, fmt.Errorf("open git repo error: %w", err)
 	}
@@ -156,7 +158,12 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 	return lastTag, hash.String(), nil
 }
 
-func openGitRepo(r *RepoConfig) (*git.Repository, string, error) {
+// gitOperationTimeout bounds a clone and a fetch. The execution lock is already
+// held while they run, so a remote that accepts the connection and then goes
+// silent would otherwise block every later run as well.
+const gitOperationTimeout = 15 * time.Minute
+
+func openGitRepo(ctx context.Context, r *RepoConfig) (*git.Repository, string, error) {
 	usr, err := user.Current()
 	if err != nil {
 		return nil, "", err
@@ -169,30 +176,14 @@ func openGitRepo(r *RepoConfig) (*git.Repository, string, error) {
 		return nil, "", err
 	}
 
-	var repo *git.Repository
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		cloneOptions := &git.CloneOptions{URL: r.Url}
-		if r.Auth != nil {
-			cloneOptions.Auth = r.Auth.AuthMethod
-		}
-
-		log.Printf("Cloning %s into %s\n", r.Url, repoPath)
-		repo, err = git.PlainClone(repoPath, false, cloneOptions)
+	repo, err := openExistingClone(repoPath, r.Url)
+	if err != nil {
+		return nil, "", err
+	}
+	if repo == nil {
+		repo, err = cloneRepo(ctx, r, trxDir, repoPath)
 		if err != nil {
-			return nil, "", fmt.Errorf("unable to clone repo: %w", err)
-		}
-		log.Println("Cloning done")
-	} else {
-		repo, err = git.PlainOpen(repoPath)
-		if err != nil {
-			return nil, "", fmt.Errorf("unable to open repo: %w", err)
-		}
-		// Never fetch into, verify or run commands in a clone of another
-		// repository than the configured one.
-		if originUrl, err := originUrl(repo); err != nil {
-			return nil, "", fmt.Errorf("unable to read origin of the existing clone %s: %w", repoPath, err)
-		} else if originUrl != r.Url {
-			return nil, "", fmt.Errorf("existing clone %s has origin %s, expected %s: remove the directory to re-clone", repoPath, originUrl, r.Url)
+			return nil, "", err
 		}
 	}
 
@@ -201,12 +192,86 @@ func openGitRepo(r *RepoConfig) (*git.Repository, string, error) {
 	if r.Auth != nil {
 		fetchOptions.Auth = r.Auth.AuthMethod
 	}
-	err = repo.Fetch(fetchOptions)
+
+	fetchCtx, cancel := context.WithTimeout(ctx, gitOperationTimeout)
+	defer cancel()
+	err = repo.FetchContext(fetchCtx, fetchOptions)
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil, "", fmt.Errorf("unable to fetch tags: %w", err)
 	}
 
 	return repo, repoPath, nil
+}
+
+// openExistingClone returns the clone at repoPath, or nil when there is none to
+// use. A directory left behind by an interrupted clone is removed instead of
+// failing every run from now on, but a clone of a different repository is an
+// error: nothing may fetch into, verify or run commands in it.
+func openExistingClone(repoPath, url string) (*git.Repository, error) {
+	if _, err := os.Stat(repoPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unable to stat the clone %s: %w", repoPath, err)
+	}
+
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		log.Printf("Removing the unusable clone %s (%s)\n", repoPath, err.Error())
+		if err := os.RemoveAll(repoPath); err != nil {
+			return nil, fmt.Errorf("unable to remove the unusable clone %s: %w", repoPath, err)
+		}
+		return nil, nil
+	}
+
+	clonedUrl, err := originUrl(repo)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read origin of the existing clone %s: %w", repoPath, err)
+	}
+	if clonedUrl != url {
+		return nil, fmt.Errorf("existing clone %s has origin %s, expected %s: remove the directory to re-clone", repoPath, clonedUrl, url)
+	}
+
+	return repo, nil
+}
+
+// cloneRepo clones into a temporary directory and renames it into place, so an
+// interrupted clone leaves no half-written repository behind.
+func cloneRepo(ctx context.Context, r *RepoConfig, trxDir, repoPath string) (*git.Repository, error) {
+	if err := os.MkdirAll(trxDir, 0o755); err != nil {
+		return nil, fmt.Errorf("unable to create %s: %w", trxDir, err)
+	}
+
+	tmpPath, err := os.MkdirTemp(trxDir, ".clone-*")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create a temporary clone directory: %w", err)
+	}
+	defer os.RemoveAll(tmpPath)
+
+	cloneOptions := &git.CloneOptions{URL: r.Url}
+	if r.Auth != nil {
+		cloneOptions.Auth = r.Auth.AuthMethod
+	}
+
+	log.Printf("Cloning %s into %s\n", r.Url, repoPath)
+	cloneCtx, cancel := context.WithTimeout(ctx, gitOperationTimeout)
+	defer cancel()
+	if _, err := git.PlainCloneContext(cloneCtx, tmpPath, false, cloneOptions); err != nil {
+		return nil, fmt.Errorf("unable to clone repo: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, repoPath); err != nil {
+		return nil, fmt.Errorf("unable to move the clone to %s: %w", repoPath, err)
+	}
+	log.Println("Cloning done")
+
+	// Reopened at its final path: the repository returned by the clone still
+	// refers to the temporary directory.
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open repo: %w", err)
+	}
+	return repo, nil
 }
 
 // tagFetchOptions fetches the tags forced and pruning: a tag deleted or moved
