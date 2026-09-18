@@ -59,7 +59,10 @@ func newSshAuth(key, password string) (*Auth, error) {
 	if key == "" {
 		return nil, nil
 	}
-	sshKey, _ := os.ReadFile(key)
+	sshKey, err := os.ReadFile(key)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read the ssh key %s: %w", key, err)
+	}
 	publicKey, err := ssh.NewPublicKeys("git", sshKey, password)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get ssh public key: %w", err)

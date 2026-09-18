@@ -41,7 +41,12 @@ func run(opts runOptions) error {
 		return fmt.Errorf("config error: %w", err)
 	}
 
-	locker := lock.NewManager(lock.NewLocalLocker(), disableLock, lockTimeout)
+	localLocker, err := lock.NewLocalLocker()
+	if err != nil {
+		return fmt.Errorf("locker error: %w", err)
+	}
+
+	locker := lock.NewManager(localLocker, disableLock, lockTimeout)
 	if err := locker.Acquire(cfg.Repo.Url); err != nil {
 		return fmt.Errorf("lock acquire error: %w", err)
 	}
