@@ -44,7 +44,7 @@ func CheckQuorums(r *CheckQuorumsRequest) error {
 			if r.HookExecutor != nil {
 				r.HookExecutor.RunOnQuorumFailedHook(qErr.QuorumName)
 			}
-			return fmt.Errorf("quorum error: %w", qErr.Err)
+			return qErr
 		} else {
 			return fmt.Errorf("quorum error: %w", err)
 		}
@@ -59,7 +59,7 @@ func checkQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 			log.Printf("Verifying quorum %s\n", *q.Name)
 			keys, err := parseGPGKeys(q.GPGKeys, q.GPGKeyFilesPaths)
 			if err != nil {
-				return &Error{QuorumName: *q.Name, Err: fmt.Errorf("quorum `%s` error reading GPG keys: %w", *q.Name, err)}
+				return &Error{QuorumName: *q.Name, Err: fmt.Errorf("error reading GPG keys: %w", err)}
 			}
 			err = trdlGit.VerifyTagSignatures(repo, trdlGit.VerifyTagSignaturesRequest{
 				Tag:          tag,
