@@ -1,6 +1,7 @@
 package git
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"path"
@@ -29,6 +30,14 @@ func VerifyTagSignatures(repo *git.Repository, r VerifyTagSignaturesRequest) err
 
 func RepoNameFromUrl(url string) string {
 	return strings.TrimSuffix(path.Base(url), ".git")
+}
+
+// RepoDirName is the directory name a repository is cached and kept state
+// under. The URL hash keeps repositories that share a basename, such as
+// org-a/infra.git and org-b/infra.git, in separate clones and separate state.
+func RepoDirName(url string) string {
+	sum := sha256.Sum256([]byte(url))
+	return fmt.Sprintf("%s-%x", RepoNameFromUrl(url), sum[:6])
 }
 
 func IsNewerVersion(current, last, initial string) (bool, error) {

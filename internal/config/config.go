@@ -120,17 +120,18 @@ func validateQuorums(quorums []Quorum) error {
 		if q.MinNumberOfKeys < 1 {
 			return fmt.Errorf("quorum size needs to be greater or equal 1")
 		}
-		n := len(q.GPGKeyFilesPaths) + len(q.GPGKeys)
-		if n < q.MinNumberOfKeys {
-			return fmt.Errorf("number of GPG keys is less then number of minimum GPG keys. specified: %d, minimum number: %d", n, q.MinNumberOfKeys)
-		}
-
 		if err := validateKeyFilePath(q.GPGKeyFilesPaths); err != nil {
 			return err
 		}
 
-		if err := validateGPGKeys(q); err != nil {
+		// Counted after the keys are parsed: a quorum is a number of distinct
+		// key holders, not a number of config entries.
+		n, err := validateGPGKeys(q)
+		if err != nil {
 			return err
+		}
+		if n < q.MinNumberOfKeys {
+			return fmt.Errorf("number of GPG keys is less then number of minimum GPG keys. specified: %d, minimum number: %d", n, q.MinNumberOfKeys)
 		}
 	}
 	return nil
@@ -139,7 +140,11 @@ func validateQuorums(quorums []Quorum) error {
 // validateGPGKeys makes sure every trusted key is a parseable armored public
 // key. Doing it here surfaces a misconfigured key as a config error instead of
 // a quorum failure (which would also trigger the onQuorumFailure hook).
-func validateGPGKeys(q Quorum) error {
+// It returns the number of key entries, and rejects a quorum that lists the
+// same key twice: the verifier drops one entry per matching signature, so a
+// duplicated entry lets a single key holder satisfy minNumberOfKeys > 1. An
+// entry holding several keys still counts as one, for the same reason.
+func validateGPGKeys(q Quorum) (int, error) {
 	name := "<unnamed>"
 	if q.Name != nil {
 		name = *q.Name
@@ -147,16 +152,24 @@ func validateGPGKeys(q Quorum) error {
 
 	keys, err := q.AllGPGKeys()
 	if err != nil {
-		return fmt.Errorf("quorum %q %w", name, err)
+		return 0, fmt.Errorf("quorum %q %w", name, err)
 	}
 
+	seenAt := make(map[string]string)
 	for i, key := range keys {
-		if err := validateGPGKey(key); err != nil {
-			return fmt.Errorf("quorum %q %s: %w", name, q.gpgKeySource(i), err)
+		fingerprints, err := validateGPGKey(key)
+		if err != nil {
+			return 0, fmt.Errorf("quorum %q %s: %w", name, q.gpgKeySource(i), err)
+		}
+		for _, fp := range fingerprints {
+			if prev, ok := seenAt[fp]; ok {
+				return 0, fmt.Errorf("quorum %q %s: duplicates the GPG key %s already listed in %s. a quorum must be made of distinct keys", name, q.gpgKeySource(i), fp, prev)
+			}
+			seenAt[fp] = q.gpgKeySource(i)
 		}
 	}
 
-	return nil
+	return len(keys), nil
 }
 
 // AllGPGKeys returns the trusted keys of the quorum: the inline ones and the
@@ -181,20 +194,23 @@ func (q Quorum) gpgKeySource(i int) string {
 	return fmt.Sprintf("gpgKeys[%d]", i-len(q.GPGKeyFilesPaths))
 }
 
-func validateGPGKey(key string) error {
+// validateGPGKey returns the primary fingerprints of the keys in an entry.
+func validateGPGKey(key string) ([]string, error) {
 	entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(key))
 	if err != nil {
-		return fmt.Errorf("invalid GPG public key: %w", err)
+		return nil, fmt.Errorf("invalid GPG public key: %w", err)
 	}
 	if len(entities) == 0 {
-		return fmt.Errorf("invalid GPG public key: no public key found")
+		return nil, fmt.Errorf("invalid GPG public key: no public key found")
 	}
+	fingerprints := make([]string, 0, len(entities))
 	for _, e := range entities {
 		if e.PrivateKey != nil {
-			return fmt.Errorf("invalid GPG public key: key %X is a private key", e.PrimaryKey.KeyId)
+			return nil, fmt.Errorf("invalid GPG public key: key %X is a private key", e.PrimaryKey.KeyId)
 		}
+		fingerprints = append(fingerprints, fmt.Sprintf("%X", e.PrimaryKey.Fingerprint))
 	}
-	return nil
+	return fingerprints, nil
 }
 
 func validateKeyFilePath(path []string) error {

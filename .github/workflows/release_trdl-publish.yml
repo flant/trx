@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Notify
-        uses: mattermost/action-mattermost-notify@master
+        uses: mattermost/action-mattermost-notify@ae31bb6f9e26a54336e79696f108a2c91cf55b4e # v2.1.0
         with:
           MATTERMOST_WEBHOOK_URL: ${{ secrets.LOOP_NOTIFICATION_WEBHOOK }}
           MATTERMOST_CHANNEL: ${{ secrets.LOOP_NOTIFICATION_CHANNEL }}
@@ -27,7 +27,7 @@ jobs:
             ${{ secrets.LOOP_NOTIFICATION_GROUP }} [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) task sign pls
 
       - name: Publish with retry
-        uses: werf/trdl-vault-actions/publish@main
+        uses: werf/trdl-vault-actions/publish@92e6e6d13b6927c9fa0ad1dfa90fdded4c474581 # main
         with:
           vault-addr: ${{ secrets.TRDL_VAULT_ADDR }}
           project-name: trx
@@ -39,7 +39,7 @@ jobs:
     if: always()
     needs:
       - publish
-    uses: werf/common-ci/.github/workflows/notification.yml@main
+    uses: werf/common-ci/.github/workflows/notification.yml@3cbc92fa058bac285b05135387110dbfc68ffcbc # main
     secrets:
       loopNotificationGroup: ${{ secrets.LOOP_NOTIFICATION_GROUP }}
       webhook: ${{ secrets.LOOP_NOTIFICATION_WEBHOOK }}

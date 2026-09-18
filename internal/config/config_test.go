@@ -33,6 +33,7 @@ func armoredEd25519PublicKey(t *testing.T) string {
 func TestValidateQuorums_gpgKeys(t *testing.T) {
 	name := "main"
 	ed25519PublicKey := armoredEd25519PublicKey(t)
+	otherPublicKey := armoredEd25519PublicKey(t)
 
 	keyFile := filepath.Join(t.TempDir(), "key.asc")
 	require.NoError(t, os.WriteFile(keyFile, []byte(ed25519PublicKey), 0o600))
@@ -62,6 +63,32 @@ func TestValidateQuorums_gpgKeys(t *testing.T) {
 			name:      "garbage key file",
 			quorum:    Quorum{Name: &name, MinNumberOfKeys: 1, GPGKeyFilesPaths: []string{brokenFile}},
 			wantError: `quorum "main" gpgKeyPaths[0]`,
+		},
+		{
+			name:   "two distinct keys",
+			quorum: Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey, otherPublicKey}},
+		},
+		{
+			name:      "the same key listed twice inline",
+			quorum:    Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey, ed25519PublicKey}},
+			wantError: `quorum "main" gpgKeys[1]: duplicates the GPG key`,
+		},
+		{
+			name:      "the same key inline and from a file",
+			quorum:    Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey}, GPGKeyFilesPaths: []string{keyFile}},
+			wantError: `quorum "main" gpgKeys[0]: duplicates the GPG key`,
+		},
+		{
+			// The verifier drops the whole entry once one of its keys
+			// matched, so such an entry can never count for two.
+			name:      "two keys in one entry",
+			quorum:    Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey + otherPublicKey}},
+			wantError: "number of GPG keys is less then number of minimum GPG keys",
+		},
+		{
+			name:      "fewer keys than minNumberOfKeys",
+			quorum:    Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey}},
+			wantError: "number of GPG keys is less then number of minimum GPG keys",
 		},
 	}
 

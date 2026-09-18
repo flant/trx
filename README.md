@@ -143,6 +143,9 @@ quorums:
         -----END PGP PUBLIC KEY BLOCK-----
 
 # Optional. Define actions to be taken at different stages of command execution.
+# onCommandSkipped and onQuorumFailure run before the tag is verified, so their
+# working directory is the one trx was started in, not the repository clone.
+# The other hooks and the commands run in the clone, checked out at the verified tag.
 hooks:
   onCommandStarted:
     - "echo 'Command started: {{ .RepoTag }} at {{ .RepoCommit }}'"
@@ -178,3 +181,7 @@ To force the execution even if no new version is detected, use the `--force` fla
 ```sh
 trx --force
 ```
+
+A tag whose quorum verification or commands failed is not retried by itself: trx
+exits with an error and does not run the hooks again until a newer tag is pushed,
+or until the tag is retried explicitly with `--force`.

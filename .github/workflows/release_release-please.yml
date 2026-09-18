@@ -23,7 +23,7 @@ jobs:
         id: extract_branch
 
       - name: Release
-        uses: werf/third-party-release-please-action@werf
+        uses: werf/third-party-release-please-action@3ffe30dc066891c7448316bcb9af81ede504b2b4 # werf
         with:
           default-branch: ${{ steps.extract_branch.outputs.branch }}
           release-type: go
@@ -52,7 +52,7 @@ jobs:
   notify:
     if: failure()
     needs: release-please
-    uses: werf/common-ci/.github/workflows/notification.yml@main
+    uses: werf/common-ci/.github/workflows/notification.yml@3cbc92fa058bac285b05135387110dbfc68ffcbc # main
     secrets:
       loopNotificationGroup: ${{ secrets.LOOP_NOTIFICATION_GROUP }}
       webhook: ${{ secrets.LOOP_NOTIFICATION_WEBHOOK }}

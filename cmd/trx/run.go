@@ -41,16 +41,18 @@ func run(opts runOptions) error {
 		return fmt.Errorf("config error: %w", err)
 	}
 
+	locker := lock.NewManager(lock.NewLocalLocker(), disableLock, lockTimeout)
+	if err := locker.Acquire(cfg.Repo.Url); err != nil {
+		return fmt.Errorf("lock acquire error: %w", err)
+	}
+
+	// Under the lock: creating the storage may move state written by an
+	// earlier version.
 	storage, err := storage.NewStorage(&storage.StorageOpts{
 		Config: cfg,
 	})
 	if err != nil {
 		return fmt.Errorf("init storage error: %w", err)
-	}
-
-	locker := lock.NewManager(lock.NewLocalLocker(), disableLock, lockTimeout)
-	if err := locker.Acquire(cfg.Repo.Url); err != nil {
-		return fmt.Errorf("lock acquire error: %w", err)
 	}
 
 	gitClient, err := git.NewGitClient(cfg.Repo)
@@ -90,8 +92,23 @@ func run(opts runOptions) error {
 		}
 	}
 
+	// A tag that already failed is not retried on its own: it would fail the
+	// same way on every run and fire its hook every time. Recovery is a newer
+	// tag, or --force.
+	lastFailedTag, err := storage.CheckLastFailedTag()
+	if err != nil {
+		return fmt.Errorf("check last failed tag error: %w", err)
+	}
+	if lastFailedTag == failedTagID(gitTargetObject) && !force {
+		return fmt.Errorf("tag %s already failed in an earlier run, not retrying it: push a newer tag, move this one, or run with --force", gitTargetObject.Tag)
+	}
+
+	// Up to here nothing has been checked out, and the executor still runs in
+	// the directory trx was started in: the hooks above must not execute with
+	// unverified repository content as their working directory.
 	err = quorum.CheckQuorums(cfg.Quorums, gitClient.Repo, gitTargetObject.Tag)
 	if err != nil {
+		storeFailedTag(storage, gitTargetObject)
 		var qErr *quorum.Error
 		if errors.As(err, &qErr) {
 			executor.Vars["FailedQuorumName"] = qErr.QuorumName
@@ -104,8 +121,15 @@ func run(opts runOptions) error {
 		}
 	}
 
-	cmdsToRun, err := getCmdsToRun(cfg, opts, executor)
+	if err := gitClient.Checkout(gitTargetObject); err != nil {
+		storeFailedTag(storage, gitTargetObject)
+		return fmt.Errorf("checkout error: %w", err)
+	}
+	executor.WorkDir = gitClient.RepoPath
+
+	cmdsToRun, err := getCmdsToRun(cfg, opts, executor, gitClient.RepoPath)
 	if err != nil {
+		storeFailedTag(storage, gitTargetObject)
 		return fmt.Errorf("get commands to run error: %w", err)
 	}
 
@@ -115,6 +139,7 @@ func run(opts runOptions) error {
 	}
 
 	if err := executor.Exec(cmdsToRun); err != nil {
+		storeFailedTag(storage, gitTargetObject)
 		if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
 			log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
 		}
@@ -131,6 +156,20 @@ func run(opts runOptions) error {
 
 	log.Println("All done")
 	return nil
+}
+
+// storeFailedTag records the tag so the next run skips it instead of failing
+// identically. It must not mask the failure that is being reported.
+func storeFailedTag(s *storage.StorageService, t *git.TargetGitObject) {
+	if err := s.StoreFailedTag(failedTagID(t)); err != nil {
+		log.Printf("WARNING unable to store the failed tag %s: %s", t.Tag, err.Error())
+	}
+}
+
+// failedTagID identifies the tag by name and object, so that moving a tag that
+// failed is a way out and not a name skipped for good.
+func failedTagID(t *git.TargetGitObject) string {
+	return t.Tag + " " + t.Commit
 }
 
 func generateCmdVars(cfg *config.Config, t *git.TargetGitObject) map[string]string {
@@ -152,7 +191,7 @@ func mergeEnvs(envs, cfgEnv map[string]string) []string {
 	return newEnv
 }
 
-func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executor) ([]string, error) {
+func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executor, repoPath string) ([]string, error) {
 	var cmdsToRun []string
 	if len(opts.cmdFromCli) > 0 {
 		cmdsToRun = []string{strings.Join(opts.cmdFromCli, " ")}
@@ -162,7 +201,7 @@ func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executo
 	if len(cfg.Commands) > 0 {
 		cmdsToRun = cfg.Commands
 	} else {
-		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.Repo.ConfigFile)
+		runCfg, err := config.NewRunnerConfig(repoPath, cfg.Repo.ConfigFile)
 		if err != nil {
 			return nil, fmt.Errorf("config error: %w", err)
 		}

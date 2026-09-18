@@ -1,6 +1,7 @@
 package git
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -82,4 +83,15 @@ func TestCheckNewVersion_unhappyPath(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, b)
 	}
+}
+
+// Two repositories with the same basename used to share a clone and a state
+// file, so one config verified and deployed the other's repository.
+func TestRepoDirName_sameBasenameDiffers(t *testing.T) {
+	a := RepoDirName("git@github.com:org-a/infra.git")
+	b := RepoDirName("git@github.com:org-b/infra.git")
+
+	assert.NotEqual(t, a, b)
+	assert.Equal(t, a, RepoDirName("git@github.com:org-a/infra.git"))
+	assert.True(t, strings.HasPrefix(a, "infra-"))
 }
