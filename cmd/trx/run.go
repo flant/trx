@@ -60,7 +60,7 @@ func run(opts runOptions) error {
 		return fmt.Errorf("init storage error: %w", err)
 	}
 
-	gitClient, err := git.NewGitClient(cfg.Repo)
+	gitClient, err := git.NewGitClient(ctx, cfg.Repo)
 	if err != nil {
 		return fmt.Errorf("new git client error: %w", err)
 	}

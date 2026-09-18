@@ -1,11 +1,15 @@
 package git
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/require"
 )
@@ -52,4 +56,59 @@ func TestTagFetchOptions_prunesOnlyDeletedTags(t *testing.T) {
 	require.NoError(t, err)
 	_, err = repo.Tag("latest-signature")
 	require.NoError(t, err)
+}
+
+// A directory left behind by an interrupted clone used to fail PlainOpen on
+// every later run, with no way out but removing it by hand.
+func TestOpenExistingClone_removesBrokenClone(t *testing.T) {
+	repoPath := filepath.Join(t.TempDir(), "infra-0123456789ab")
+	require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0o755))
+
+	repo, err := openExistingClone(repoPath, "git@github.com:flant/trx.git")
+	require.NoError(t, err)
+	require.Nil(t, repo, "a broken clone must not be reused")
+	require.NoDirExists(t, repoPath)
+}
+
+// A clone of another repository is never reused, whatever its state.
+func TestOpenExistingClone_refusesAForeignClone(t *testing.T) {
+	repoPath := t.TempDir()
+	repo, err := git.PlainInit(repoPath, false)
+	require.NoError(t, err)
+	_, err = repo.CreateRemote(&gitconfig.RemoteConfig{
+		Name: git.DefaultRemoteName,
+		URLs: []string{"git@github.com:org-b/infra.git"},
+	})
+	require.NoError(t, err)
+
+	_, err = openExistingClone(repoPath, "git@github.com:org-a/infra.git")
+	require.ErrorContains(t, err, "has origin git@github.com:org-b/infra.git")
+	require.DirExists(t, repoPath)
+}
+
+// The clone goes to a temporary directory and is renamed into place, so an
+// interrupted clone leaves nothing behind for the next run to trip over.
+func TestCloneRepo_movesTheCloneIntoPlace(t *testing.T) {
+	upstreamDir := t.TempDir()
+	upstream, err := git.PlainInit(upstreamDir, false)
+	require.NoError(t, err)
+	commitFile(t, upstream, upstreamDir, "a.txt")
+
+	trxDir := filepath.Join(t.TempDir(), ".trx")
+	repoPath := filepath.Join(trxDir, "infra-0123456789ab")
+
+	repo, err := cloneRepo(context.Background(), &RepoConfig{Url: upstreamDir}, trxDir, repoPath)
+	require.NoError(t, err)
+	require.NotNil(t, repo)
+
+	require.FileExists(t, filepath.Join(repoPath, "a.txt"))
+
+	entries, err := os.ReadDir(trxDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "the temporary clone directory was left behind")
+	require.Equal(t, filepath.Base(repoPath), entries[0].Name())
+
+	url, err := originUrl(repo)
+	require.NoError(t, err)
+	require.Equal(t, upstreamDir, url)
 }
