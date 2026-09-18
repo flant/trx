@@ -28,10 +28,10 @@ func CheckQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 	var g errgroup.Group
 	for _, q := range quorums {
 		g.Go(func() error {
-			log.Printf("Verifying quorum %s\n", *q.Name)
+			log.Printf("Verifying quorum %s\n", q.DisplayName())
 			keys, err := q.AllGPGKeys()
 			if err != nil {
-				return &Error{QuorumName: *q.Name, Err: fmt.Errorf("quorum `%s` error reading GPG keys: %w", *q.Name, err)}
+				return &Error{QuorumName: q.DisplayName(), Err: fmt.Errorf("error reading GPG keys: %w", err)}
 			}
 			err = trdlGit.VerifyTagSignatures(repo, trdlGit.VerifyTagSignaturesRequest{
 				Tag:          tag,
@@ -39,7 +39,7 @@ func CheckQuorums(quorums []config.Quorum, repo *git.Repository, tag string) err
 				GPGKeys:      keys,
 			})
 			if err != nil {
-				return &Error{QuorumName: *q.Name, Err: err}
+				return &Error{QuorumName: q.DisplayName(), Err: err}
 			}
 			return nil
 		})
