@@ -79,3 +79,32 @@ func TestGetLastSemverTag_annotatedTagResolvesToCommit(t *testing.T) {
 	require.Equal(t, "v1.0.0", tag)
 	require.Equal(t, commit.String(), hash)
 }
+
+// semver sorts v2.0.0-rc1 above v1.9.0, so a release candidate became the
+// newest tag and was deployed as a release.
+func TestGetLastSemverTag_skipsPreReleases(t *testing.T) {
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+
+	release := commitFile(t, repo, dir, "a.txt")
+	_, err = repo.CreateTag("v1.9.0", release, nil)
+	require.NoError(t, err)
+
+	rc := commitFile(t, repo, dir, "b.txt")
+	_, err = repo.CreateTag("v2.0.0-rc1", rc, nil)
+	require.NoError(t, err)
+
+	client := &GitClient{Repo: repo, RepoPath: dir}
+	tag, hash, err := client.GetLastSemverTag()
+	require.NoError(t, err)
+	require.Equal(t, "v1.9.0", tag)
+	require.Equal(t, release.String(), hash)
+
+	// Unless the repository releases through -rc tags on purpose.
+	client.allowPrerelease = true
+	tag, hash, err = client.GetLastSemverTag()
+	require.NoError(t, err)
+	require.Equal(t, "v2.0.0-rc1", tag)
+	require.Equal(t, rc.String(), hash)
+}

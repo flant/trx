@@ -21,7 +21,7 @@ The development team releases software versions (Git tags in [SemVer format](htt
 
 End users create a project configuration specifying repository access credentials and trusted GPG key groups. The trx utility then:
 
-1.	Fetches the latest available software version (highest [SemVer](https://semver.org/)).
+1.	Fetches the latest available software version (highest [SemVer](https://semver.org/) release; pre-release tags such as `v2.0.0-rc1` are skipped unless `repo.allowPrerelease` is set).
 2.	Verifies the required signatures.
 3.	Executes commands in the repository root.
 
@@ -117,6 +117,10 @@ repo:
 
   # Optional. Ensures processing starts from a specific tag and prevents processing older tags (safeguard against freeze attacks).
   initialLastProcessedTag: "v0.10.1"
+
+  # Optional, default is false. Deploy pre-release tags (v2.0.0-rc1) as well,
+  # for a repository that releases through them on purpose.
+  allowPrerelease: false
 
 # Optional. Commands defined here have a higher priority than those specified in `trx.yaml`.
 commands:
