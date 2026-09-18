@@ -6,17 +6,14 @@ import (
 )
 
 type Local struct {
-	locker   Locker
-	disabled bool
+	locker Locker
 }
 
-func NewLocalLocker(disabled bool) *Local {
+func NewLocalLocker() *Local {
 	locker, _ := lock.HostLocker()
-	return &Local{locker: locker, disabled: disabled}
+	return &Local{locker: locker}
 }
 
 func (l *Local) Acquire(lockName string, opts lockgate.AcquireOptions) (bool, lockgate.LockHandle, error) {
-	return l.locker.Acquire(lockName, lockgate.AcquireOptions{
-		NonBlocking: l.disabled,
-	})
+	return l.locker.Acquire(lockName, opts)
 }
