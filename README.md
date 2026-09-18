@@ -115,19 +115,19 @@ repo:
   # Optional, default is `trx.yaml` in the repository.
   configFile: "trx.yaml"
 
-  # Optional. Commands defined here have a higher priority than those specified in `trx.yaml`.
-  commands:
-    - werf converge
-    - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
-
-  # Optional. Set environment variables here to be used in the commands.
-  # Environment variables defined here are merged with those in the configFile,
-  # but have higher priority (values in this section will override those in the configFile).
-  env:
-    WERF_ENV: "production"
-
   # Optional. Ensures processing starts from a specific tag and prevents processing older tags (safeguard against freeze attacks).
   initialLastProcessedTag: "v0.10.1"
+
+# Optional. Commands defined here have a higher priority than those specified in `trx.yaml`.
+commands:
+  - werf converge
+  - echo "{{ .RepoUrl }} / {{ .RepoTag }} / {{ .RepoCommit }}"
+
+# Optional. Set environment variables here to be used in the commands.
+# Environment variables defined here are merged with those in the configFile,
+# but have higher priority (values in this section will override those in the configFile).
+env:
+  WERF_ENV: "production"
 
 quorums:
   - name: main
