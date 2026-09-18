@@ -57,3 +57,25 @@ func commitFile(t *testing.T, repo *git.Repository, dir, name string) plumbing.H
 	require.NoError(t, err)
 	return hash
 }
+
+// Signed releases use annotated tags, whose own object hash is not a commit.
+// {{ .RepoCommit }} used to be that object hash.
+func TestGetLastSemverTag_annotatedTagResolvesToCommit(t *testing.T) {
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+
+	commit := commitFile(t, repo, dir, "a.txt")
+	tagRef, err := repo.CreateTag("v1.0.0", commit, &git.CreateTagOptions{
+		Message: "v1.0.0",
+		Tagger:  &object.Signature{Name: "trx", Email: "trx@example.com", When: time.Now()},
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, commit, tagRef.Hash(), "the annotated tag must be an object of its own")
+
+	client := &GitClient{Repo: repo, RepoPath: dir}
+	tag, hash, err := client.GetLastSemverTag()
+	require.NoError(t, err)
+	require.Equal(t, "v1.0.0", tag)
+	require.Equal(t, commit.String(), hash)
+}

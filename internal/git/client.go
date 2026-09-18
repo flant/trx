@@ -13,7 +13,6 @@ import (
 	"github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"trx/internal/config"
 )
@@ -58,19 +57,35 @@ type TargetGitObject struct {
 	Commit string
 }
 
+// commitHash resolves a tag to the commit it points at. An annotated tag is an
+// object of its own, and its hash is not a commit: signed releases use
+// annotated tags, so this is the normal case rather than the exception.
+func (g *GitClient) commitHash(tag string) (plumbing.Hash, error) {
+	tagRef, err := g.Repo.Tag(tag)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("tag not found: %w", err)
+	}
+
+	tagObj, err := g.Repo.TagObject(tagRef.Hash())
+	if errors.Is(err, plumbing.ErrObjectNotFound) {
+		return tagRef.Hash(), nil
+	}
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("unable to read tag %s: %w", tag, err)
+	}
+
+	commit, err := tagObj.Commit()
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("unable to resolve the commit of tag %s: %w", tag, err)
+	}
+	return commit.Hash, nil
+}
+
 func (g *GitClient) Checkout(o *TargetGitObject) error {
 	log.Printf("Got last tag %s. Perform checkout\n", o.Tag)
-	tagRef, err := g.Repo.Tag(o.Tag)
+	tagHash, err := g.commitHash(o.Tag)
 	if err != nil {
-		return fmt.Errorf("tag not found: %w", err)
-	}
-	tagHash := tagRef.Hash()
-	tagObj, err := g.Repo.Object(plumbing.TagObject, tagHash)
-	if err == nil {
-		annotatedTag, ok := tagObj.(*object.Tag)
-		if ok {
-			tagHash = annotatedTag.Target
-		}
+		return err
 	}
 
 	worktree, err := g.Repo.Worktree()
@@ -95,14 +110,11 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 	}
 
 	var versions []*semver.Version
-	tagMap := make(map[string]plumbing.ReferenceName)
 
 	err = tagRefs.ForEach(func(ref *plumbing.Reference) error {
-		tagName := ref.Name().Short()
-		v, err := semver.NewVersion(tagName)
+		v, err := semver.NewVersion(ref.Name().Short())
 		if err == nil {
 			versions = append(versions, v)
-			tagMap[v.Original()] = ref.Name()
 		}
 		return nil
 	})
@@ -116,14 +128,11 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 
 	sort.Sort(sort.Reverse(semver.Collection(versions)))
 	lastTag := versions[0].Original()
-	refName := tagMap[lastTag]
 
-	ref, err := g.Repo.Reference(refName, true)
+	hash, err := g.commitHash(lastTag)
 	if err != nil {
 		return "", "", err
 	}
-
-	hash := ref.Hash()
 
 	return lastTag, hash.String(), nil
 }
