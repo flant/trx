@@ -1,4 +1,4 @@
-dockerImage: ghcr.io/flant/trx/builder:53607301c1d0b7f6c75e52a5784382abb53ac8ce@sha256:95071741e79de3c075fb2fd7c3fdddc54150f53d3f8fe7867d26ffb39c2e05c0
+dockerImage: ghcr.io/flant/trx/builder:03c5bf437c989d90c91dafc6dfbc7a60af0aeee7@sha256:bddda55f5a0e2f6173983d8c2343511945bffea9f54dc1e899822908e47fa62e
 commands:
   - task build:dist version={{ .Tag }}
   - task verify:dist:binaries version={{ .Tag }}

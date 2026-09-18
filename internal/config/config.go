@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/go-playground/validator/v10"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
@@ -125,6 +127,71 @@ func validateQuorums(quorums []Quorum) error {
 
 		if err := validateKeyFilePath(q.GPGKeyFilesPaths); err != nil {
 			return err
+		}
+
+		if err := validateGPGKeys(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateGPGKeys makes sure every trusted key is a parseable armored public
+// key. Doing it here surfaces a misconfigured key as a config error instead of
+// a quorum failure (which would also trigger the onQuorumFailure hook).
+func validateGPGKeys(q Quorum) error {
+	name := "<unnamed>"
+	if q.Name != nil {
+		name = *q.Name
+	}
+
+	keys, err := q.AllGPGKeys()
+	if err != nil {
+		return fmt.Errorf("quorum %q %w", name, err)
+	}
+
+	for i, key := range keys {
+		if err := validateGPGKey(key); err != nil {
+			return fmt.Errorf("quorum %q %s: %w", name, q.gpgKeySource(i), err)
+		}
+	}
+
+	return nil
+}
+
+// AllGPGKeys returns the trusted keys of the quorum: the inline ones and the
+// contents of every gpgKeyPaths file.
+func (q Quorum) AllGPGKeys() ([]string, error) {
+	keys := make([]string, 0, len(q.GPGKeys)+len(q.GPGKeyFilesPaths))
+	for i, path := range q.GPGKeyFilesPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("gpgKeyPaths[%d]: unable to read key file: %w", i, err)
+		}
+		keys = append(keys, string(data))
+	}
+	return append(keys, q.GPGKeys...), nil
+}
+
+// gpgKeySource names the config field a key from AllGPGKeys came from.
+func (q Quorum) gpgKeySource(i int) string {
+	if i < len(q.GPGKeyFilesPaths) {
+		return fmt.Sprintf("gpgKeyPaths[%d] (%s)", i, q.GPGKeyFilesPaths[i])
+	}
+	return fmt.Sprintf("gpgKeys[%d]", i-len(q.GPGKeyFilesPaths))
+}
+
+func validateGPGKey(key string) error {
+	entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(key))
+	if err != nil {
+		return fmt.Errorf("invalid GPG public key: %w", err)
+	}
+	if len(entities) == 0 {
+		return fmt.Errorf("invalid GPG public key: no public key found")
+	}
+	for _, e := range entities {
+		if e.PrivateKey != nil {
+			return fmt.Errorf("invalid GPG public key: key %X is a private key", e.PrimaryKey.KeyId)
 		}
 	}
 	return nil
