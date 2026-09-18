@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -35,16 +36,29 @@ func NewExecutor(ctx context.Context, e, vars map[string]string) (*Executor, err
 	if err != nil {
 		return nil, fmt.Errorf("unable to determine the working directory: %w", err)
 	}
-	var envs []string
-	for k, v := range e {
-		envs = append(envs, fmt.Sprintf("%s=%s", strings.ToUpper(k), v))
-	}
 	return &Executor{
 		Ctx:     ctx,
 		WorkDir: wd,
-		Env:     envs,
+		Env:     envSlice(e),
 		Vars:    vars,
 	}, nil
+}
+
+// SetEnv replaces the environment of the executor.
+func (e *Executor) SetEnv(envs map[string]string) {
+	e.Env = envSlice(envs)
+}
+
+// envSlice renders environment variables as KEY=value. Viper lower-cases every
+// key it reads, so the names are upper-cased here, in the one place both the
+// operator config and the repository config go through.
+func envSlice(envs map[string]string) []string {
+	out := make([]string, 0, len(envs))
+	for k, v := range envs {
+		out = append(out, fmt.Sprintf("%s=%s", strings.ToUpper(k), v))
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (e *Executor) Exec(commands []string) error {

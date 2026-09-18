@@ -76,3 +76,15 @@ func TestResolveTemplate_doesNotEscape(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, `deploy v1.0.0+build.3 from "https://example.com/a.git?x=1&y=2"`, got)
 }
+
+// Viper lower-cases config keys, and the repository-config path used to replace
+// the environment wholesale without upper-casing them again, so commands saw
+// foo=bar and tools such as werf or kubectl ignored it.
+func TestSetEnv_upperCasesNames(t *testing.T) {
+	e, err := NewExecutor(context.Background(), map[string]string{"werf_env": "production"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"WERF_ENV=production"}, e.Env)
+
+	e.SetEnv(map[string]string{"werf_env": "staging", "kubeconfig": "/tmp/kc"})
+	require.Equal(t, []string{"KUBECONFIG=/tmp/kc", "WERF_ENV=staging"}, e.Env)
+}

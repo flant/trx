@@ -180,15 +180,17 @@ func generateCmdVars(cfg *config.Config, t *git.TargetGitObject) map[string]stri
 	return vars
 }
 
-func mergeEnvs(envs, cfgEnv map[string]string) []string {
-	for k, v := range cfgEnv {
-		envs[k] = v
+// mergeEnvs merges the environment of the repository config with the operator
+// one, which wins as documented, into a new map: neither input is modified.
+func mergeEnvs(repoEnv, operatorEnv map[string]string) map[string]string {
+	merged := make(map[string]string, len(repoEnv)+len(operatorEnv))
+	for k, v := range repoEnv {
+		merged[k] = v
 	}
-	newEnv := make([]string, 0, len(envs))
-	for k, v := range envs {
-		newEnv = append(newEnv, fmt.Sprintf("%s=%s", k, v))
+	for k, v := range operatorEnv {
+		merged[k] = v
 	}
-	return newEnv
+	return merged
 }
 
 func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executor, repoPath string) ([]string, error) {
@@ -206,7 +208,7 @@ func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executo
 			return nil, fmt.Errorf("config error: %w", err)
 		}
 		cmdsToRun = runCfg.Commands
-		executor.Env = mergeEnvs(cfg.Env, runCfg.Env)
+		executor.SetEnv(mergeEnvs(runCfg.Env, cfg.Env))
 	}
 
 	if len(cmdsToRun) == 0 {
