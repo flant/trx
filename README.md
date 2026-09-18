@@ -204,3 +204,13 @@ To disable quorum checking use `--disable-quorums-check` flag:
 ```sh
 trx --disable-quorums-check
 ```
+
+Only one trx instance processes a repository at a time. `--lock-timeout` bounds how long to wait for that lock (`0`, the default, waits indefinitely), and `--disable-lock` skips locking altogether:
+```sh
+trx --lock-timeout 5m
+```
+
+Cloning and fetching the repository is bounded by `--git-timeout` (10m by default):
+```sh
+trx --git-timeout 2m
+```
