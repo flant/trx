@@ -5,18 +5,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
+	"text/template"
 )
 
-type Vars struct {
-	RepoUrl string
-	RepoTag string
-}
+// stderrTailLimit caps how much stderr is kept in memory for the error message.
+const stderrTailLimit = 64 * 1024
 
 type Executor struct {
 	Ctx     context.Context
@@ -25,7 +24,11 @@ type Executor struct {
 
 func NewExecutor(ctx context.Context, workDir string) (*Executor, error) {
 	if workDir == "" {
-		workDir, _ = os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("unable to get working directory: %w", err)
+		}
+		workDir = wd
 	}
 	return &Executor{
 		Ctx:     ctx,
@@ -79,7 +82,9 @@ func resolve(commands []string, vars map[string]string) ([]string, error) {
 }
 
 func resolveTemplate(tmpl string, vars map[string]string) (string, error) {
-	t, err := template.New("cmd").Parse(tmpl)
+	// missingkey=error: an unknown variable must not silently expand into a
+	// shell command.
+	t, err := template.New("cmd").Option("missingkey=error").Parse(tmpl)
 	if err != nil {
 		return "", err
 	}
@@ -99,43 +104,100 @@ type excuteOpts struct {
 }
 
 func execute(ctx context.Context, opts *excuteOpts) error {
-	cmd := exec.CommandContext(ctx, "sh", "-c", opts.cmd)
+	cmd := exec.Command("sh", "-c", opts.cmd)
 	cmd.Dir = opts.wd
 	cmd.Env = append(os.Environ(), opts.env...)
+	setProcessGroup(cmd)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	defer stdoutPipe.Close()
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-	defer stderrPipe.Close()
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting command: %w", err)
 	}
 
+	// Signal the whole process group, otherwise only `sh` dies and the actual
+	// workload keeps running as an orphan.
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		scanner := bufio.NewScanner(stdoutPipe)
-		for scanner.Scan() {
-			log.Println(scanner.Text())
+		select {
+		case <-ctx.Done():
+			log.Println("Terminating running command")
+			terminateProcessGroup(cmd)
+		case <-done:
 		}
 	}()
 
-	var stderr bytes.Buffer
-	if _, err := io.Copy(&stderr, stderrPipe); err != nil {
-		log.Printf("error write stderr buffer: %s", err.Error())
-	}
+	var (
+		tail tail
+		wg   sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		stream(stdoutPipe, nil)
+	}()
+	go func() {
+		defer wg.Done()
+		stream(stderrPipe, &tail)
+	}()
+	// Both pipes must be drained before Wait, which closes them.
+	wg.Wait()
 
 	if err := cmd.Wait(); err != nil {
-		if stderr.Len() > 0 {
-			log.Println(stderr.String())
+		if t := tail.String(); t != "" {
+			return fmt.Errorf("error executing command: %w\n%s", err, t)
 		}
 		return fmt.Errorf("error executing command: %w", err)
 	}
 	return nil
+}
+
+// stream logs the output line by line without a line length limit and keeps the
+// last stderrTailLimit bytes for the error message.
+func stream(r io.Reader, tail *tail) {
+	br := bufio.NewReader(r)
+	for {
+		line, err := br.ReadString('\n')
+		if len(line) > 0 {
+			log.Println(strings.TrimRight(line, "\n"))
+			if tail != nil {
+				tail.append(line)
+			}
+		}
+		if err != nil {
+			if err != io.EOF {
+				log.Printf("error reading command output: %s", err)
+			}
+			return
+		}
+	}
+}
+
+type tail struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (t *tail) append(s string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.buf = append(t.buf, s...)
+	if len(t.buf) > stderrTailLimit {
+		t.buf = t.buf[len(t.buf)-stderrTailLimit:]
+	}
+}
+
+func (t *tail) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.TrimRight(string(t.buf), "\n")
 }

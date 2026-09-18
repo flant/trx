@@ -47,9 +47,7 @@ func TestPrepareExecOpts(t *testing.T) {
 			commands:     []string{"echo {{ .UnknownVar }}"},
 			env:          map[string]string{},
 			templateVars: map[string]string{},
-			wantErr:      false,
-			wantCmd:      "set -e\necho ",
-			wantEnv:      []string{},
+			wantErr:      true,
 		},
 	}
 
