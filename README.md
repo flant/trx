@@ -181,3 +181,7 @@ To force the execution even if no new version is detected, use the `--force` fla
 ```sh
 trx --force
 ```
+
+A tag whose quorum verification or commands failed is not retried by itself: trx
+exits with an error and does not run the hooks again until a newer tag is pushed,
+or until the tag is retried explicitly with `--force`.

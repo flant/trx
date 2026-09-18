@@ -36,6 +36,27 @@ func TestMigrateLegacyState(t *testing.T) {
 	require.Equal(t, "v2.0.0", tag)
 }
 
+// A tag that failed must be remembered, so the next run skips it instead of
+// failing identically and firing its hook again, and must be forgotten as soon
+// as a tag succeeds.
+func TestFailedTag(t *testing.T) {
+	s := &Local{path: filepath.Join(t.TempDir(), "infra-0123456789ab")}
+
+	tag, err := s.CheckLastFailedTag()
+	require.NoError(t, err)
+	require.Empty(t, tag)
+
+	require.NoError(t, s.StoreFailedTag("v1.2.3"))
+	tag, err = s.CheckLastFailedTag()
+	require.NoError(t, err)
+	require.Equal(t, "v1.2.3", tag)
+
+	require.NoError(t, s.StoreSucceedTag("v1.2.4"))
+	tag, err = s.CheckLastFailedTag()
+	require.NoError(t, err)
+	require.Empty(t, tag)
+}
+
 func TestMigrateLegacyState_noLegacyDir(t *testing.T) {
 	dir := t.TempDir()
 	s := &Local{path: filepath.Join(dir, "infra-0123456789ab")}

@@ -169,11 +169,7 @@ func openGitRepo(r *RepoConfig) (*git.Repository, string, error) {
 	}
 
 	log.Println("Fetching tags")
-	fetchOptions := &git.FetchOptions{
-		RefSpecs: []gitconfig.RefSpec{
-			gitconfig.RefSpec("refs/tags/*:refs/tags/*"),
-		},
-	}
+	fetchOptions := tagFetchOptions()
 	if r.Auth != nil {
 		fetchOptions.Auth = r.Auth.AuthMethod
 	}
@@ -183,6 +179,19 @@ func openGitRepo(r *RepoConfig) (*git.Repository, string, error) {
 	}
 
 	return repo, repoPath, nil
+}
+
+// tagFetchOptions fetches the tags forced and pruning: a tag deleted or moved
+// upstream must not keep winning locally, which would wedge every later run on
+// it.
+func tagFetchOptions() *git.FetchOptions {
+	return &git.FetchOptions{
+		RefSpecs: []gitconfig.RefSpec{
+			gitconfig.RefSpec("+refs/tags/*:refs/tags/*"),
+		},
+		Force: true,
+		Prune: true,
+	}
 }
 
 // originUrl returns the first URL of the origin remote.

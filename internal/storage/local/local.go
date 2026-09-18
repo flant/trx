@@ -16,6 +16,7 @@ const TypeLocalStorage = "local"
 
 const (
 	fileLastProcessedCommit = "last_processed_commit"
+	fileLastFailedTag       = "last_failed_tag"
 )
 
 type Local struct {
@@ -66,9 +67,30 @@ func (s *Local) migrateLegacyState(legacyPath string) error {
 }
 
 func (s *Local) CheckLastSucceedTag() (string, error) {
-	filePath := filepath.Join(s.path, fileLastProcessedCommit)
+	return s.read(fileLastProcessedCommit)
+}
 
-	data, err := os.ReadFile(filePath)
+func (s *Local) StoreSucceedTag(commit string) error {
+	if err := s.write(fileLastProcessedCommit, commit); err != nil {
+		return err
+	}
+	// A tag that succeeded is not a tag to skip anymore.
+	if err := os.Remove(filepath.Join(s.path, fileLastFailedTag)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+	return nil
+}
+
+func (s *Local) CheckLastFailedTag() (string, error) {
+	return s.read(fileLastFailedTag)
+}
+
+func (s *Local) StoreFailedTag(tag string) error {
+	return s.write(fileLastFailedTag, tag)
+}
+
+func (s *Local) read(name string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(s.path, name))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
@@ -76,16 +98,11 @@ func (s *Local) CheckLastSucceedTag() (string, error) {
 		return "", fmt.Errorf("error read from local storage: %w", err)
 	}
 
-	commit := strings.TrimSpace(string(data))
-	if commit == "" {
-		return "", nil
-	}
-
-	return commit, nil
+	return strings.TrimSpace(string(data)), nil
 }
 
-func (s *Local) StoreSucceedTag(commit string) error {
-	if commit == "" {
+func (s *Local) write(name, value string) error {
+	if value == "" {
 		return fmt.Errorf("tag can't be empty")
 	}
 
@@ -93,7 +110,5 @@ func (s *Local) StoreSucceedTag(commit string) error {
 		return err
 	}
 
-	filePath := filepath.Join(s.path, fileLastProcessedCommit)
-
-	return os.WriteFile(filePath, []byte(commit+"\n"), 0o644)
+	return os.WriteFile(filepath.Join(s.path, name), []byte(value+"\n"), 0o644)
 }

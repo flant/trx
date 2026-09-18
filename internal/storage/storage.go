@@ -8,6 +8,8 @@ import (
 type Storage interface {
 	CheckLastSucceedTag() (string, error)
 	StoreSucceedTag(commit string) error
+	CheckLastFailedTag() (string, error)
+	StoreFailedTag(tag string) error
 }
 
 type StorageService struct {
@@ -33,4 +35,12 @@ func (s *StorageService) CheckLastSucceedTag() (string, error) {
 
 func (s *StorageService) StoreSucceedTag(commit string) error {
 	return s.storage.StoreSucceedTag(commit)
+}
+
+func (s *StorageService) CheckLastFailedTag() (string, error) {
+	return s.storage.CheckLastFailedTag()
+}
+
+func (s *StorageService) StoreFailedTag(tag string) error {
+	return s.storage.StoreFailedTag(tag)
 }
