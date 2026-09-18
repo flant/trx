@@ -15,12 +15,14 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"trx/internal/command"
 	"trx/internal/config"
 )
 
 type GitClient struct {
 	Repo *git.Repository
+	// RepoPath is the local clone: the working directory of the commands,
+	// but only once the tag they come from has passed quorum verification.
+	RepoPath string
 }
 
 func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
@@ -29,27 +31,26 @@ func NewGitClient(cfg config.GitRepo) (*GitClient, error) {
 		return nil, fmt.Errorf("new repo config error: %w", err)
 	}
 
-	repo, err := openGitRepo(repoConf)
+	repo, repoPath, err := openGitRepo(repoConf)
 	if err != nil {
 		return nil, fmt.Errorf("open git repo error: %w", err)
 	}
 
 	return &GitClient{
-		Repo: repo,
+		Repo:     repo,
+		RepoPath: repoPath,
 	}, nil
 }
 
+// GetTargetGitObject resolves the tag to deploy without touching the worktree:
+// nothing may check out an unverified tag, because the hooks that run before
+// verification would execute with its content as their working directory.
 func (g *GitClient) GetTargetGitObject() (*TargetGitObject, error) {
 	tag, commit, err := g.GetLastSemverTag()
 	if err != nil {
 		return nil, err
 	}
-	to := &TargetGitObject{Tag: tag, Commit: commit}
-	err = g.Checkout(to)
-	if err != nil {
-		return nil, fmt.Errorf("checkout error: %w", err)
-	}
-	return to, nil
+	return &TargetGitObject{Tag: tag, Commit: commit}, nil
 }
 
 type TargetGitObject struct {
@@ -127,17 +128,17 @@ func (g *GitClient) GetLastSemverTag() (string, string, error) {
 	return lastTag, hash.String(), nil
 }
 
-func openGitRepo(r *RepoConfig) (*git.Repository, error) {
+func openGitRepo(r *RepoConfig) (*git.Repository, string, error) {
 	usr, err := user.Current()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	trxDir := filepath.Join(usr.HomeDir, ".trx")
 	repoPath := filepath.Join(trxDir, RepoDirName(r.Url))
 
 	if err := migrateLegacyClone(filepath.Join(trxDir, RepoNameFromUrl(r.Url)), repoPath, r.Url); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	var repo *git.Repository
@@ -150,24 +151,23 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 		log.Printf("Cloning %s into %s\n", r.Url, repoPath)
 		repo, err = git.PlainClone(repoPath, false, cloneOptions)
 		if err != nil {
-			return nil, fmt.Errorf("unable to clone repo: %w", err)
+			return nil, "", fmt.Errorf("unable to clone repo: %w", err)
 		}
 		log.Println("Cloning done")
 	} else {
 		repo, err = git.PlainOpen(repoPath)
 		if err != nil {
-			return nil, fmt.Errorf("unable to open repo: %w", err)
+			return nil, "", fmt.Errorf("unable to open repo: %w", err)
 		}
 		// Never fetch into, verify or run commands in a clone of another
 		// repository than the configured one.
 		if originUrl, err := originUrl(repo); err != nil {
-			return nil, fmt.Errorf("unable to read origin of the existing clone %s: %w", repoPath, err)
+			return nil, "", fmt.Errorf("unable to read origin of the existing clone %s: %w", repoPath, err)
 		} else if originUrl != r.Url {
-			return nil, fmt.Errorf("existing clone %s has origin %s, expected %s: remove the directory to re-clone", repoPath, originUrl, r.Url)
+			return nil, "", fmt.Errorf("existing clone %s has origin %s, expected %s: remove the directory to re-clone", repoPath, originUrl, r.Url)
 		}
 	}
 
-	command.WorkDir = repoPath
 	log.Println("Fetching tags")
 	fetchOptions := &git.FetchOptions{
 		RefSpecs: []gitconfig.RefSpec{
@@ -179,10 +179,10 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 	}
 	err = repo.Fetch(fetchOptions)
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return nil, fmt.Errorf("unable to fetch tags: %w", err)
+		return nil, "", fmt.Errorf("unable to fetch tags: %w", err)
 	}
 
-	return repo, nil
+	return repo, repoPath, nil
 }
 
 // originUrl returns the first URL of the origin remote.

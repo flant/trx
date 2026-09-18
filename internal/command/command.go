@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-var WorkDir = ""
-
 type Vars struct {
 	RepoUrl string
 	RepoTag string
@@ -29,10 +27,13 @@ type Executor struct {
 	Vars    map[string]string
 }
 
+// NewExecutor returns an executor running in the working directory trx itself
+// was started in. Only after the tag has passed quorum verification and has
+// been checked out may WorkDir be moved to the clone.
 func NewExecutor(ctx context.Context, e, vars map[string]string) (*Executor, error) {
-	wd := WorkDir
-	if wd == "" {
-		wd, _ = os.Getwd()
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine the working directory: %w", err)
 	}
 	var envs []string
 	for k, v := range e {

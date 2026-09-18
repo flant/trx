@@ -143,6 +143,9 @@ quorums:
         -----END PGP PUBLIC KEY BLOCK-----
 
 # Optional. Define actions to be taken at different stages of command execution.
+# onCommandSkipped and onQuorumFailure run before the tag is verified, so their
+# working directory is the one trx was started in, not the repository clone.
+# The other hooks and the commands run in the clone, checked out at the verified tag.
 hooks:
   onCommandStarted:
     - "echo 'Command started: {{ .RepoTag }} at {{ .RepoCommit }}'"

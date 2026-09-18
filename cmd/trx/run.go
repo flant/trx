@@ -90,6 +90,9 @@ func run(opts runOptions) error {
 		}
 	}
 
+	// Up to here nothing has been checked out, and the executor still runs in
+	// the directory trx was started in: the hooks above must not execute with
+	// unverified repository content as their working directory.
 	err = quorum.CheckQuorums(cfg.Quorums, gitClient.Repo, gitTargetObject.Tag)
 	if err != nil {
 		var qErr *quorum.Error
@@ -104,7 +107,12 @@ func run(opts runOptions) error {
 		}
 	}
 
-	cmdsToRun, err := getCmdsToRun(cfg, opts, executor)
+	if err := gitClient.Checkout(gitTargetObject); err != nil {
+		return fmt.Errorf("checkout error: %w", err)
+	}
+	executor.WorkDir = gitClient.RepoPath
+
+	cmdsToRun, err := getCmdsToRun(cfg, opts, executor, gitClient.RepoPath)
 	if err != nil {
 		return fmt.Errorf("get commands to run error: %w", err)
 	}
@@ -152,7 +160,7 @@ func mergeEnvs(envs, cfgEnv map[string]string) []string {
 	return newEnv
 }
 
-func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executor) ([]string, error) {
+func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executor, repoPath string) ([]string, error) {
 	var cmdsToRun []string
 	if len(opts.cmdFromCli) > 0 {
 		cmdsToRun = []string{strings.Join(opts.cmdFromCli, " ")}
@@ -162,7 +170,7 @@ func getCmdsToRun(cfg *config.Config, opts runOptions, executor *command.Executo
 	if len(cfg.Commands) > 0 {
 		cmdsToRun = cfg.Commands
 	} else {
-		runCfg, err := config.NewRunnerConfig(command.WorkDir, cfg.Repo.ConfigFile)
+		runCfg, err := config.NewRunnerConfig(repoPath, cfg.Repo.ConfigFile)
 		if err != nil {
 			return nil, fmt.Errorf("config error: %w", err)
 		}
