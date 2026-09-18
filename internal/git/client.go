@@ -104,6 +104,12 @@ func (g *GitClient) Checkout(o *TargetGitObject) error {
 	if err != nil {
 		return fmt.Errorf("checkout error: %w", err)
 	}
+
+	// A forced checkout leaves untracked files alone, so build artifacts of
+	// the previous release would otherwise take part in the next deployment.
+	if err := worktree.Clean(&git.CleanOptions{Dir: true}); err != nil {
+		return fmt.Errorf("unable to clean the worktree: %w", err)
+	}
 	return nil
 }
 

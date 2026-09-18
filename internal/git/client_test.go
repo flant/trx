@@ -108,3 +108,26 @@ func TestGetLastSemverTag_skipsPreReleases(t *testing.T) {
 	require.Equal(t, "v2.0.0-rc1", tag)
 	require.Equal(t, rc.String(), hash)
 }
+
+// A forced checkout does not remove untracked files, so artifacts of the
+// previous release used to end up in the worktree of the next one.
+func TestCheckout_removesUntrackedFiles(t *testing.T) {
+	dir := t.TempDir()
+	repo, err := git.PlainInit(dir, false)
+	require.NoError(t, err)
+
+	head := commitFile(t, repo, dir, "a.txt")
+	_, err = repo.CreateTag("v1.0.0", head, nil)
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "leftover.env"), []byte("SECRET=1"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".werf-build"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".werf-build", "out"), []byte("junk"), 0o644))
+
+	client := &GitClient{Repo: repo, RepoPath: dir}
+	require.NoError(t, client.Checkout(&TargetGitObject{Tag: "v1.0.0", Commit: head.String()}))
+
+	require.NoFileExists(t, filepath.Join(dir, "leftover.env"))
+	require.NoDirExists(t, filepath.Join(dir, ".werf-build"))
+	require.FileExists(t, filepath.Join(dir, "a.txt"))
+}
