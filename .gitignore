@@ -2,3 +2,5 @@
 /.idea
 dist/
 .DS_Store
+.pi/
+.pp/
