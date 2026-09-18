@@ -63,3 +63,16 @@ func TestExecute_failureReportsStderr(t *testing.T) {
 	require.ErrorContains(t, err, "exit status 3")
 	require.Contains(t, out.String(), "boom")
 }
+
+// Commands were rendered with html/template, so a tag such as v1.0.0+build.3
+// reached sh as v1.0.0&#43;build.3.
+func TestResolveTemplate_doesNotEscape(t *testing.T) {
+	vars := map[string]string{
+		"RepoTag": "v1.0.0+build.3",
+		"RepoUrl": "https://example.com/a.git?x=1&y=2",
+	}
+
+	got, err := resolveTemplate(`deploy {{ .RepoTag }} from "{{ .RepoUrl }}"`, vars)
+	require.NoError(t, err)
+	require.Equal(t, `deploy v1.0.0+build.3 from "https://example.com/a.git?x=1&y=2"`, got)
+}
