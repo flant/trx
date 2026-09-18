@@ -16,11 +16,6 @@ import (
 	"time"
 )
 
-type Vars struct {
-	RepoUrl string
-	RepoTag string
-}
-
 type Executor struct {
 	Ctx     context.Context
 	WorkDir string

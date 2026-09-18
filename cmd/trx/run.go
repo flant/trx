@@ -90,7 +90,7 @@ func run(opts runOptions) error {
 			log.Println("No new version, but force flag specified. Proceeding... ")
 		case false:
 			if hookErr := executor.RunOnCommandSkippedHook(cfg); hookErr != nil {
-				log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
+				log.Printf("WARNING onCommandSkipped hook execution error: %s", hookErr.Error())
 			}
 			log.Println("No new version. execution will be skipped")
 			return nil
@@ -118,9 +118,9 @@ func run(opts runOptions) error {
 		if errors.As(err, &qErr) {
 			executor.Vars["FailedQuorumName"] = qErr.QuorumName
 			if hookErr := executor.RunOnQuorumFailedHook(cfg); hookErr != nil {
-				log.Println("WARNING onCommandSkipped hook execution error: %w", hookErr)
+				log.Printf("WARNING onQuorumFailure hook execution error: %s", hookErr.Error())
 			}
-			return fmt.Errorf("quorum error: %w", qErr.Err)
+			return qErr
 		} else {
 			return fmt.Errorf("quorum error: %w", err)
 		}
@@ -146,7 +146,7 @@ func run(opts runOptions) error {
 	if err := executor.Exec(cmdsToRun); err != nil {
 		storeFailedTag(storage, gitTargetObject)
 		if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
-			log.Println("WARNING onCommandFailure hook execution error: %w", hookErr)
+			log.Printf("WARNING onCommandFailure hook execution error: %s", hookErr.Error())
 		}
 		return fmt.Errorf("run command error: %w", err)
 	}
@@ -156,7 +156,7 @@ func run(opts runOptions) error {
 	}
 
 	if hookErr := executor.RunOnCommandSuccessHook(cfg); hookErr != nil {
-		log.Println("WARNING onCommandSuccess hook execution error: %w", hookErr)
+		log.Printf("WARNING onCommandSuccess hook execution error: %s", hookErr.Error())
 	}
 
 	log.Println("All done")
