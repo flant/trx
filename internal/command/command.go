@@ -1,9 +1,9 @@
 package command
 
 import (
-	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
+	"time"
 )
 
 var WorkDir = ""
@@ -101,39 +103,47 @@ func execute(ctx context.Context, opts *excuteOpts) error {
 	cmd.Dir = opts.wd
 	cmd.Env = append(os.Environ(), opts.env...)
 
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	defer stdoutPipe.Close()
+	// Both streams are copied to the log as the command produces them:
+	// os/exec owns the copying goroutines and waits for them before Run
+	// returns, so no output can be lost and no amount of output can block
+	// the child.
+	out := &syncWriter{w: log.Writer()}
+	cmd.Stdout = out
+	cmd.Stderr = out
 
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	defer stderrPipe.Close()
+	// A backgrounded grandchild keeps the pipes open after sh itself is
+	// gone, which would hold the execution lock forever.
+	cmd.WaitDelay = outputWaitDelay
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("error starting command: %w", err)
-	}
-
-	go func() {
-		scanner := bufio.NewScanner(stdoutPipe)
-		for scanner.Scan() {
-			log.Println(scanner.Text())
-		}
-	}()
-
-	var stderr bytes.Buffer
-	if _, err := io.Copy(&stderr, stderrPipe); err != nil {
-		log.Printf("error write stderr buffer: %s", err.Error())
-	}
-
-	if err := cmd.Wait(); err != nil {
-		if stderr.Len() > 0 {
-			log.Println("executing error:", stderr.String())
+	if err := cmd.Run(); err != nil {
+		// The command itself finished: only a process it left behind kept
+		// the output open, which is not a reason to report a failure.
+		if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState.Success() {
+			log.Println("WARNING a background process is still holding the command output open")
+			return nil
 		}
 		return fmt.Errorf("error executing command: %w", err)
 	}
 	return nil
+}
+
+// outputWaitDelay is how long the output of a process outliving the command is
+// still copied. A variable so the tests do not have to wait for it.
+var outputWaitDelay = 10 * time.Second
+
+// syncWriter serializes the stdout and stderr copying goroutines.
+//
+// os/exec runs one goroutine per stream unless both writers are the same
+// comparable value, which is why the same syncWriter is used for both: a
+// pointer compares equal to itself, so in practice only one goroutine writes
+// and the mutex is a guard against that guarantee changing.
+type syncWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (w *syncWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.w.Write(p)
 }
