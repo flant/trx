@@ -105,7 +105,11 @@ func resolve(commands []string, vars map[string]string) ([]string, error) {
 }
 
 func resolveTemplate(tmpl string, vars map[string]string) (string, error) {
-	t, err := template.New("cmd").Parse(tmpl)
+	// A variable that does not exist is an error: rendering {{ .RepoTagg }}
+	// as the literal <no value> used to hand that string to sh as an
+	// argument. Variables that exist but are not set yet, such as
+	// FailedQuorumName outside the quorum hook, render empty.
+	t, err := template.New("cmd").Option("missingkey=error").Parse(tmpl)
 	if err != nil {
 		return "", err
 	}

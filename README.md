@@ -94,6 +94,10 @@ Available template variables:
 - `{{ .RepoTag }}` – current tag.
 - `{{ .RepoCommit }}` – current commit.
 - `{{ .RepoUrl }}` – repository URL.
+- `{{ .FailedQuorumName }}` – the quorum that failed verification; empty outside the `onQuorumFailure` hook.
+
+A variable that is not on this list is an error, so a typo fails the run instead
+of reaching the shell as `<no value>`.
 
 ## For a user
 

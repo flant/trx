@@ -167,3 +167,21 @@ func TestExecute_cancelKillsAProcessIgnoringSigterm(t *testing.T) {
 	time.Sleep(4 * time.Second)
 	require.NoFileExists(t, marker, "a SIGTERM-ignoring workload outlived the canceled run")
 }
+
+// A misspelled variable used to be rendered as the literal <no value> and
+// handed to sh as an argument.
+func TestResolveTemplate_unknownVariableIsAnError(t *testing.T) {
+	_, err := resolveTemplate(`deploy {{ .RepoTagg }}`, map[string]string{"RepoTag": "v1.0.0"})
+	require.ErrorContains(t, err, "RepoTagg")
+}
+
+// A variable that is only filled in for one hook must still render for the
+// others, or a shared env value mentioning it would break every one of them.
+func TestResolveTemplate_knownButUnsetVariableRendersEmpty(t *testing.T) {
+	got, err := resolveTemplate(`quorum "{{ .FailedQuorumName }}" failed`, map[string]string{
+		"RepoTag":          "v1.0.0",
+		"FailedQuorumName": "",
+	})
+	require.NoError(t, err)
+	require.Equal(t, `quorum "" failed`, got)
+}
