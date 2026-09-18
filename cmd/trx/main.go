@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -10,6 +11,7 @@ var (
 	configPath  string
 	force       bool
 	disableLock bool
+	lockTimeout time.Duration
 )
 
 type runOptions struct {
@@ -35,6 +37,7 @@ By default, it uses the ./trx.yaml configuration file, but you can specify a dif
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "./trx.yaml", "Path to config file")
 	rootCmd.Flags().BoolVarP(&force, "force", "f", false, "Force execution if no new version found")
 	rootCmd.Flags().BoolVarP(&disableLock, "disable-lock", "", false, "Disable execution locking")
+	rootCmd.Flags().DurationVar(&lockTimeout, "lock-timeout", 0, "Give up waiting for the execution lock after this duration (0 waits forever)")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)

@@ -48,12 +48,9 @@ func run(opts runOptions) error {
 		return fmt.Errorf("init storage error: %w", err)
 	}
 
-	locker := lock.NewManager(lock.NewLocalLocker(disableLock))
+	locker := lock.NewManager(lock.NewLocalLocker(), disableLock, lockTimeout)
 	if err := locker.Acquire(cfg.Repo.Url); err != nil {
 		return fmt.Errorf("lock acquire error: %w", err)
-	}
-	if disableLock {
-		log.Println("Processing without execution lock")
 	}
 
 	gitClient, err := git.NewGitClient(cfg.Repo)
