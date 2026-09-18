@@ -171,8 +171,10 @@ func openGitRepo(ctx context.Context, r *RepoConfig) (*git.Repository, error) {
 		RefSpecs: []gitconfig.RefSpec{
 			gitconfig.RefSpec("refs/tags/*:refs/tags/*"),
 		},
+		// Prune drops tags deleted upstream, which otherwise keep winning tag
+		// selection forever. Updates are not forced: a tag moved upstream must
+		// not silently replace the local one.
 		Prune: true,
-		Force: true,
 	}
 	if r.Auth != nil {
 		fetchOptions.Auth = r.Auth.AuthMethod
