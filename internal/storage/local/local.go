@@ -11,10 +11,8 @@ import (
 	"trx/internal/git"
 )
 
-const TypeLocalStorage = "local"
-
 const (
-	fileLastProcessedCommit = "last_processed_commit"
+	fileLastProcessedTag = "last_processed_tag"
 )
 
 type Local struct {
@@ -34,7 +32,7 @@ func (s *Local) CheckTaskLastSucceedTag(taskName string) (string, error) {
 		return "", fmt.Errorf("task name can't be empty")
 	}
 	path := filepath.Join(s.path, taskName)
-	filePath := filepath.Join(path, fileLastProcessedCommit)
+	filePath := filepath.Join(path, fileLastProcessedTag)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -44,19 +42,19 @@ func (s *Local) CheckTaskLastSucceedTag(taskName string) (string, error) {
 		return "", fmt.Errorf("error read from local storage: %w", err)
 	}
 
-	commit := strings.TrimSpace(string(data))
-	if commit == "" {
+	tag := strings.TrimSpace(string(data))
+	if tag == "" {
 		return "", nil
 	}
 
-	return commit, nil
+	return tag, nil
 }
 
-func (s *Local) StoreTaskSucceedTag(taskName, commit string) error {
+func (s *Local) StoreTaskSucceedTag(taskName, tag string) error {
 	if taskName == "" {
 		return fmt.Errorf("task name can't be empty")
 	}
-	if commit == "" {
+	if tag == "" {
 		return fmt.Errorf("tag can't be empty")
 	}
 	path := filepath.Join(s.path, taskName)
@@ -64,7 +62,7 @@ func (s *Local) StoreTaskSucceedTag(taskName, commit string) error {
 		return err
 	}
 
-	filePath := filepath.Join(path, fileLastProcessedCommit)
+	filePath := filepath.Join(path, fileLastProcessedTag)
 
-	return os.WriteFile(filePath, []byte(commit+"\n"), 0o644)
+	return os.WriteFile(filePath, []byte(tag+"\n"), 0o644)
 }
