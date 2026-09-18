@@ -64,20 +64,17 @@ type Task struct {
 }
 
 func NewConfig(configPath string) (*Config, error) {
+	if configPath == "" {
+		return nil, fmt.Errorf("config path is not specified")
+	}
 	config := &Config{}
 
-	err := loadConfig(configPath, _default, config, config.Validate)
+	err := loadConfig(configPath, nil, config, config.Validate)
 	if err != nil {
 		return nil, err
 	}
 
 	return config, nil
-}
-
-func _default() {
-	viper.SetConfigName("trx")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
 }
 
 func (config *Config) Validate() error {
@@ -185,6 +182,9 @@ func fileExists(path string) error {
 
 func loadConfig(configPath string, defaultFunc func(), config interface{}, validate func() error) error {
 	if configPath == "" {
+		if defaultFunc == nil {
+			return fmt.Errorf("config path is not specified")
+		}
 		defaultFunc()
 	} else {
 		viper.SetConfigFile(configPath)
