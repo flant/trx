@@ -101,6 +101,9 @@ func (s *Local) read(name string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
+// write replaces a state file atomically: a crash in the middle of a plain
+// rewrite used to leave a truncated tag such as "v1.", which then failed every
+// later run with "invalid last processed tag" until someone removed the file.
 func (s *Local) write(name, value string) error {
 	if value == "" {
 		return fmt.Errorf("tag can't be empty")
@@ -110,5 +113,37 @@ func (s *Local) write(name, value string) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(s.path, name), []byte(value+"\n"), 0o644)
+	tmp, err := os.CreateTemp(s.path, name+".*")
+	if err != nil {
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+	defer os.Remove(tmp.Name())
+
+	if _, err := tmp.WriteString(value + "\n"); err != nil {
+		tmp.Close()
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+
+	if err := os.Rename(tmp.Name(), filepath.Join(s.path, name)); err != nil {
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+
+	// The rename itself is metadata of the directory, and is only durable
+	// once the directory is synced.
+	dir, err := os.Open(s.path)
+	if err != nil {
+		return fmt.Errorf("error write to local storage: %w", err)
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
