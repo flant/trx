@@ -57,6 +57,22 @@ func envSlice(envs map[string]string) []string {
 }
 
 func (e *Executor) Exec(commands []string) error {
+	return e.exec(e.Ctx, commands)
+}
+
+// ExecHook runs a hook even when the run itself has been canceled: reporting
+// that the deployment was interrupted is exactly what onCommandFailure is for,
+// and it used to fail immediately with "context canceled".
+func (e *Executor) ExecHook(commands []string) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(e.Ctx), hookTimeout)
+	defer cancel()
+	return e.exec(ctx, commands)
+}
+
+// hookTimeout bounds a hook, which runs while the execution lock is held.
+const hookTimeout = 5 * time.Minute
+
+func (e *Executor) exec(ctx context.Context, commands []string) error {
 	cmds, err := resolve(commands, e.Vars)
 	if err != nil {
 		return fmt.Errorf("can't resolve commands: %w", err)
@@ -66,7 +82,7 @@ func (e *Executor) Exec(commands []string) error {
 		return fmt.Errorf("can't resolve envs: %w", err)
 	}
 	script := "set -e\n" + strings.Join(cmds, "\n")
-	if err := execute(e.Ctx, &excuteOpts{
+	if err := execute(ctx, &excuteOpts{
 		cmd: script,
 		env: envs,
 		wd:  e.WorkDir,
@@ -112,6 +128,29 @@ func execute(ctx context.Context, opts *excuteOpts) error {
 	cmd := exec.CommandContext(ctx, "sh", "-c", opts.cmd)
 	cmd.Dir = opts.wd
 	cmd.Env = append(os.Environ(), opts.env...)
+
+	// On cancellation the whole process group is signaled, not just sh, and
+	// a group that ignores SIGTERM is killed once the wait delay is over:
+	// os/exec would only kill the direct child.
+	setProcessGroup(cmd)
+
+	var (
+		mu        sync.Mutex
+		killTimer *time.Timer
+	)
+	cmd.Cancel = func() error {
+		mu.Lock()
+		killTimer = time.AfterFunc(outputWaitDelay, func() { _ = killProcessGroup(cmd) })
+		mu.Unlock()
+		return terminateProcessGroup(cmd)
+	}
+	defer func() {
+		mu.Lock()
+		if killTimer != nil {
+			killTimer.Stop()
+		}
+		mu.Unlock()
+	}()
 
 	// Both streams are copied to the log as the command produces them:
 	// os/exec owns the copying goroutines and waits for them before Run

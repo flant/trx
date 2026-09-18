@@ -33,6 +33,9 @@ func run(opts runOptions) error {
 	go func() {
 		sig := <-signalChan
 		log.Printf("Received signal: %s", sig)
+		// Restores the default disposition, so a second signal ends trx at
+		// once instead of waiting for the shutdown hooks.
+		signal.Stop(signalChan)
 		cancel()
 	}()
 
@@ -138,13 +141,21 @@ func run(opts runOptions) error {
 		return fmt.Errorf("get commands to run error: %w", err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("interrupted before the commands were started: %w", err)
+	}
+
 	// TODO: think about running this hook concurrently with the command
 	if hookErr := executor.RunOnCommandStartedHook(cfg); hookErr != nil {
 		log.Printf("WARNING onCommandStarted hook execution error: %s", hookErr.Error())
 	}
 
 	if err := executor.Exec(cmdsToRun); err != nil {
-		storeFailedTag(storage, gitTargetObject)
+		// An interrupted run is not a tag that failed: it must be retried
+		// as it is, without --force.
+		if ctx.Err() == nil {
+			storeFailedTag(storage, gitTargetObject)
+		}
 		if hookErr := executor.RunOnCommandFailureHook(cfg); hookErr != nil {
 			log.Printf("WARNING onCommandFailure hook execution error: %s", hookErr.Error())
 		}
