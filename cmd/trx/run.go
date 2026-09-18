@@ -139,7 +139,13 @@ func handleRunTasksError(err error, hookExecutor *hooks.HookExecutor) error {
 
 		case errors.Is(runErr.Err, tasks.ErrExcutionFailed):
 			hookExecutor.RunOnCommandFailureHook(runErr.TaskName)
-			return fmt.Errorf("task %s failed: %w", runErr.TaskName, runErr.Err)
+			return fmt.Errorf("task %s failed: %w", runErr.TaskName, runErr)
+
+		case errors.Is(runErr.Err, tasks.ErrStateStoreFailed):
+			// The release did run, only the state was lost. Report success to the
+			// hooks and fail the run so that the operator can tell the difference.
+			_ = hookExecutor.RunOnCommandSuccessHook()
+			return fmt.Errorf("task %s succeeded, but the last processed tag was not stored, it will run again on the next poll: %w", runErr.TaskName, runErr)
 
 		default:
 			return fmt.Errorf("task running error: %w", runErr.Err)

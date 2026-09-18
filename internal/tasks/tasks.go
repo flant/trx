@@ -59,11 +59,15 @@ type Error struct {
 }
 
 var (
-	ErrNoNewVersion   = errors.New("no new version")
-	ErrExcutionFailed = errors.New("error running task")
+	ErrNoNewVersion     = errors.New("no new version")
+	ErrExcutionFailed   = errors.New("error running task")
+	ErrStateStoreFailed = errors.New("task succeeded but storing the last processed tag failed")
 )
 
 func (e *Error) Error() string {
+	if e.ErrMessage != "" {
+		return fmt.Sprintf("task `%s` error: %v: %s", e.TaskName, e.Err, e.ErrMessage)
+	}
 	return fmt.Sprintf("task `%s` error: %v", e.TaskName, e.Err)
 }
 
@@ -120,7 +124,11 @@ func (e *TaskExecutor) RunTasks(tasks []Task) error {
 			return err
 		}
 		if err := e.storage.StoreTaskSucceedTag(t.Name, t.Version); err != nil {
-			return fmt.Errorf("store last successed tag error for task %s: %w", t.Name, err)
+			return &Error{
+				TaskName:   t.Name,
+				Err:        ErrStateStoreFailed,
+				ErrMessage: err.Error(),
+			}
 		}
 	}
 	return nil
@@ -262,9 +270,7 @@ func getTaskToRun(c []config.Task, name, version string) ([]Task, error) {
 					InitialVersion: t.InitialLastProcessedTag,
 				},
 			}, nil
-
 		}
-
 	}
 	return nil, fmt.Errorf("task `%s` not found", name)
 }
