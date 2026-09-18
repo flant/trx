@@ -133,8 +133,12 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 		return nil, err
 	}
 
-	repoName := RepoNameFromUrl(r.Url)
-	repoPath := filepath.Join(usr.HomeDir, ".trx", repoName)
+	trxDir := filepath.Join(usr.HomeDir, ".trx")
+	repoPath := filepath.Join(trxDir, RepoDirName(r.Url))
+
+	if err := migrateLegacyClone(filepath.Join(trxDir, RepoNameFromUrl(r.Url)), repoPath, r.Url); err != nil {
+		return nil, err
+	}
 
 	var repo *git.Repository
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
@@ -154,6 +158,13 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 		if err != nil {
 			return nil, fmt.Errorf("unable to open repo: %w", err)
 		}
+		// Never fetch into, verify or run commands in a clone of another
+		// repository than the configured one.
+		if originUrl, err := originUrl(repo); err != nil {
+			return nil, fmt.Errorf("unable to read origin of the existing clone %s: %w", repoPath, err)
+		} else if originUrl != r.Url {
+			return nil, fmt.Errorf("existing clone %s has origin %s, expected %s: remove the directory to re-clone", repoPath, originUrl, r.Url)
+		}
 	}
 
 	command.WorkDir = repoPath
@@ -172,4 +183,46 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 	}
 
 	return repo, nil
+}
+
+// originUrl returns the first URL of the origin remote.
+func originUrl(repo *git.Repository) (string, error) {
+	remote, err := repo.Remote(git.DefaultRemoteName)
+	if err != nil {
+		return "", err
+	}
+	if len(remote.Config().URLs) == 0 {
+		return "", fmt.Errorf("remote %s has no URL", git.DefaultRemoteName)
+	}
+	return remote.Config().URLs[0], nil
+}
+
+// migrateLegacyClone moves a clone made by an older version, which keyed the
+// directory by the URL basename alone, to its URL-keyed location. Only a clone
+// whose origin is the configured URL is moved, so a directory shared by two
+// same-named repositories goes to the one it actually belongs to.
+func migrateLegacyClone(legacyPath, repoPath, url string) error {
+	if legacyPath == repoPath {
+		return nil
+	}
+	if _, err := os.Stat(repoPath); err == nil {
+		return nil
+	}
+	if _, err := os.Stat(legacyPath); err != nil {
+		return nil
+	}
+
+	repo, err := git.PlainOpen(legacyPath)
+	if err != nil {
+		return nil
+	}
+	if originUrl, err := originUrl(repo); err != nil || originUrl != url {
+		return nil
+	}
+
+	log.Printf("Moving clone %s to %s\n", legacyPath, repoPath)
+	if err := os.Rename(legacyPath, repoPath); err != nil {
+		return fmt.Errorf("unable to move clone %s to %s: %w", legacyPath, repoPath, err)
+	}
+	return nil
 }
