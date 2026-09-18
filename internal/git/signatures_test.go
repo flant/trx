@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/stretchr/testify/require"
@@ -39,7 +41,7 @@ func TestVerifyTagSignatures_keyAlgorithms(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			repo, tag := newRepoWithSignedTag(t, tc.signer)
+			repo, tag, _ := newRepoWithSignedTag(t, tc.signer)
 
 			var keys []string
 			for _, e := range tc.keys {
@@ -54,6 +56,30 @@ func TestVerifyTagSignatures_keyAlgorithms(t *testing.T) {
 			require.ErrorContains(t, err, tc.wantError)
 		})
 	}
+}
+
+// A real quorum of two: the tag object signature plus a signature stored in the
+// git-signatures note, one per key algorithm.
+func TestVerifyTagSignatures_quorumOfTwo(t *testing.T) {
+	eddsa := newTestEntity(t, "eddsa", packet.PubKeyAlgoEdDSA)
+	rsa := newTestEntity(t, "rsa", packet.PubKeyAlgoRSA)
+
+	repo, tag, tagHash := newRepoWithSignedTag(t, eddsa)
+	addNoteSignature(t, repo, tagHash.String(), rsa)
+
+	require.NoError(t, VerifyTagSignatures(repo, VerifyTagSignaturesRequest{
+		Tag:          tag,
+		NumberOfKeys: 2,
+		GPGKeys:      []string{armoredPublicKey(t, eddsa), armoredPublicKey(t, rsa)},
+	}))
+
+	// Only one of the two signing keys is trusted: the quorum is not reached.
+	err := VerifyTagSignatures(repo, VerifyTagSignaturesRequest{
+		Tag:          tag,
+		NumberOfKeys: 2,
+		GPGKeys:      []string{armoredPublicKey(t, eddsa)},
+	})
+	require.ErrorContains(t, err, "not enough verified PGP signatures")
 }
 
 func newTestEntity(t *testing.T, name string, algo packet.PublicKeyAlgorithm) *openpgp.Entity {
@@ -80,7 +106,7 @@ func armoredPublicKey(t *testing.T, e *openpgp.Entity) string {
 
 // newRepoWithSignedTag builds an in-memory repository with one commit and an
 // annotated tag whose tag object is PGP-signed by signer.
-func newRepoWithSignedTag(t *testing.T, signer *openpgp.Entity) (*git.Repository, string) {
+func newRepoWithSignedTag(t *testing.T, signer *openpgp.Entity) (*git.Repository, string, plumbing.Hash) {
 	t.Helper()
 
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
@@ -129,5 +155,40 @@ func newRepoWithSignedTag(t *testing.T, signer *openpgp.Entity) (*git.Repository
 	require.NoError(t, err)
 	require.True(t, strings.HasPrefix(stored.PGPSignature, "-----BEGIN PGP SIGNATURE-----"))
 
-	return repo, tagName
+	return repo, tagName, hash
+}
+
+// addNoteSignature stores a detached signature of objectID the way the
+// git-signatures plugin does: base64 on a single line, in a file named after
+// the signed object, committed to refs/tags/latest-signature.
+func addNoteSignature(t *testing.T, repo *git.Repository, objectID string, signer *openpgp.Entity) {
+	t.Helper()
+
+	var signature bytes.Buffer
+	require.NoError(t, openpgp.DetachSign(&signature, signer, strings.NewReader(objectID), nil))
+
+	blob := repo.Storer.NewEncodedObject()
+	blob.SetType(plumbing.BlobObject)
+	w, err := blob.Writer()
+	require.NoError(t, err)
+	_, err = w.Write([]byte(base64.StdEncoding.EncodeToString(signature.Bytes()) + "\n"))
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	blobHash, err := repo.Storer.SetEncodedObject(blob)
+	require.NoError(t, err)
+
+	tree := &object.Tree{Entries: []object.TreeEntry{{Name: objectID, Mode: filemode.Regular, Hash: blobHash}}}
+	treeObject := repo.Storer.NewEncodedObject()
+	require.NoError(t, tree.Encode(treeObject))
+	treeHash, err := repo.Storer.SetEncodedObject(treeObject)
+	require.NoError(t, err)
+
+	sig := object.Signature{Name: "tester", Email: "tester@example.com", When: time.Now()}
+	commit := &object.Commit{Author: sig, Committer: sig, Message: "signatures\n", TreeHash: treeHash}
+	commitObject := repo.Storer.NewEncodedObject()
+	require.NoError(t, commit.Encode(commitObject))
+	commitHash, err := repo.Storer.SetEncodedObject(commitObject)
+	require.NoError(t, err)
+
+	require.NoError(t, repo.Storer.SetReference(plumbing.NewHashReference("refs/tags/latest-signature", commitHash)))
 }

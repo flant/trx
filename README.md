@@ -33,7 +33,7 @@ Commands can be provided alongside the source code by developers and/or paramete
 
 #### GPG key requirements
 
-- Supported key algorithms: RSA and Ed25519 (EdDSA). Other algorithms (DSA, ElGamal) are not supported.
+- Recommended key algorithms: RSA and Ed25519 (EdDSA). DSA and ElGamal keys are rejected, as are signatures hashed with SHA-1 or MD5.
 - Ensure keys are stored securely (e.g., in `~/.gnupg`).
 - Private keys must be encrypted with a password.
 - Public keys must be provided to the administrator.

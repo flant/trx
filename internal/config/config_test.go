@@ -1,36 +1,38 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"github.com/stretchr/testify/require"
 )
 
-// Ed25519 (EdDSA, OpenPGP algorithm 22) public key. Previously rejected with
+// armoredEd25519PublicKey returns a freshly generated Ed25519 (EdDSA, OpenPGP
+// algorithm 22) public key. Such keys used to be rejected with
 // "openpgp: unsupported feature: public key type: 22".
-const ed25519PublicKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----
+func armoredEd25519PublicKey(t *testing.T) string {
+	t.Helper()
 
-mDMEaia9LhYJKwYBBAHaRw8BAQdAw+PghBdifN4xQ3Nv99SVTn1DCGafIGUlG26o
-Q4i4lc+0J1Zhc2lseSBNYXJtZXIgPHZhc2lseS5tYXJtZXJAZmxhbnQuY29tPoiQ
-BBMWCAA4FiEEWhGJWKZFuSvkyqcPKqrWsAV/KOoFAmomvS4CGwMFCwkIBwIGFQoJ
-CAsCBBYCAwECHgECF4AACgkQKqrWsAV/KOorowEA8D4chmaRPfojb3nKBsHykWve
-JAHPCp92HaRZBTwtxYUBAIdPPOM9+o0hiA66HNWe2FyU1QL+vK1alEDXDAF3nNAL
-uDMEaia9LhYJKwYBBAHaRw8BAQdACRh9NuRNrlsjbnedpZ197Bl0/lj4lu6Qj0hh
-W+z8MVqIeAQYFggAIBYhBFoRiVimRbkr5MqnDyqq1rAFfyjqBQJqJr0uAhsgAAoJ
-ECqq1rAFfyjqGgoA/1vb368vJ3HVN9IqWJWQUXMZRboU3Ci/zFWHUgRTa5XjAQCH
-8AVT5sklvyscDwN8vwXUFbRlDUsGY9UtMDmya4FCCrg4BGomvS4SCisGAQQBl1UB
-BQEBB0DzBG5WLGqsxx4Af7VRz6/u+7/R68cFyZqcFilvo5xiJAMBCAeIeAQYFggA
-IBYhBFoRiVimRbkr5MqnDyqq1rAFfyjqBQJqJr0uAhsMAAoJECqq1rAFfyjqqmIB
-AN+KBpx+d2jboZS/+4PI0BXum3p8gav2SsTisIahVmkAAP9RZB+anT8o16fvIZKx
-UovcZ/dYqWhi9mH/YPIwbPZlDA==
-=C7cg
------END PGP PUBLIC KEY BLOCK-----
-`
+	e, err := openpgp.NewEntity("ed25519", "", "ed25519@example.com", &packet.Config{Algorithm: packet.PubKeyAlgoEdDSA})
+	require.NoError(t, err)
+	require.Equal(t, packet.PubKeyAlgoEdDSA, e.PrimaryKey.PubKeyAlgo)
+
+	var buf bytes.Buffer
+	w, err := armor.Encode(&buf, openpgp.PublicKeyType, nil)
+	require.NoError(t, err)
+	require.NoError(t, e.Serialize(w))
+	require.NoError(t, w.Close())
+	return buf.String()
+}
 
 func TestValidateQuorums_gpgKeys(t *testing.T) {
 	name := "main"
+	ed25519PublicKey := armoredEd25519PublicKey(t)
 
 	keyFile := filepath.Join(t.TempDir(), "key.asc")
 	require.NoError(t, os.WriteFile(keyFile, []byte(ed25519PublicKey), 0o600))
