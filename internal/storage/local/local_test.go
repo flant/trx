@@ -67,3 +67,40 @@ func TestMigrateLegacyState_noLegacyDir(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, tag)
 }
+
+// The state is replaced by a rename, so a crash can leave either the old value
+// or the new one, never a truncated one, and no temp file is left behind.
+func TestStoreSucceedTag_leavesNoPartialState(t *testing.T) {
+	s := &Local{path: filepath.Join(t.TempDir(), "infra-0123456789ab")}
+
+	require.NoError(t, s.StoreSucceedTag("v1.2.3"))
+	require.NoError(t, s.StoreSucceedTag("v1.2.4"))
+
+	tag, err := s.CheckLastSucceedTag()
+	require.NoError(t, err)
+	require.Equal(t, "v1.2.4", tag)
+
+	entries, err := os.ReadDir(s.path)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "a temp file was left behind")
+	require.Equal(t, fileLastProcessedCommit, entries[0].Name())
+
+	info, err := entries[0].Info()
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+
+	// A write that cannot be renamed into place leaves the previous value
+	// intact and no leftovers.
+	require.NoError(t, os.Chmod(s.path, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(s.path, 0o755) })
+	require.Error(t, s.StoreSucceedTag("v1.2.5"))
+	require.NoError(t, os.Chmod(s.path, 0o755))
+
+	tag, err = s.CheckLastSucceedTag()
+	require.NoError(t, err)
+	require.Equal(t, "v1.2.4", tag)
+
+	entries, err = os.ReadDir(s.path)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "a failed write left a temp file behind")
+}
