@@ -23,9 +23,8 @@ type Local struct {
 
 func NewLocalStorage(repoUrl string) *Local {
 	usr, _ := user.Current()
-	repoName := git.RepoNameFromUrl(repoUrl)
 	return &Local{
-		path: filepath.Join(usr.HomeDir, ".trx", "storage", repoName),
+		path: filepath.Join(usr.HomeDir, ".trx", "storage", git.RepoDirNameFromUrl(repoUrl)),
 	}
 }
 

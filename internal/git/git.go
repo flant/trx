@@ -1,6 +1,8 @@
 package git
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"path"
@@ -29,6 +31,13 @@ func VerifyTagSignatures(repo *git.Repository, r VerifyTagSignaturesRequest) err
 
 func RepoNameFromUrl(url string) string {
 	return strings.TrimSuffix(path.Base(url), ".git")
+}
+
+// RepoDirNameFromUrl returns a directory name unique per repo url, so that
+// same-named repos from different orgs or hosts do not share a clone or state.
+func RepoDirNameFromUrl(url string) string {
+	sum := sha256.Sum256([]byte(url))
+	return fmt.Sprintf("%s-%s", RepoNameFromUrl(url), hex.EncodeToString(sum[:])[:16])
 }
 
 func IsNewerVersion(current, last, initial string) (bool, error) {

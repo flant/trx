@@ -8,6 +8,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
@@ -133,8 +134,12 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 		return nil, err
 	}
 
-	repoName := RepoNameFromUrl(r.Url)
-	repoPath := filepath.Join(usr.HomeDir, ".trx", repoName)
+	baseDir := filepath.Join(usr.HomeDir, ".trx")
+	repoPath := filepath.Join(baseDir, RepoDirNameFromUrl(r.Url))
+
+	if err := migrateLegacyDirs(baseDir, r.Url); err != nil {
+		return nil, err
+	}
 
 	var repo *git.Repository
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
@@ -154,6 +159,9 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 		if err != nil {
 			return nil, fmt.Errorf("unable to open repo: %w", err)
 		}
+		if err := checkRemoteUrl(repo, r.Url); err != nil {
+			return nil, fmt.Errorf("existing clone %s does not match configured repo url: %w", repoPath, err)
+		}
 	}
 
 	command.WorkDir = repoPath
@@ -172,4 +180,50 @@ func openGitRepo(r *RepoConfig) (*git.Repository, error) {
 	}
 
 	return repo, nil
+}
+
+func checkRemoteUrl(repo *git.Repository, url string) error {
+	remote, err := repo.Remote(git.DefaultRemoteName)
+	if err != nil {
+		return fmt.Errorf("unable to get remote %q: %w", git.DefaultRemoteName, err)
+	}
+
+	urls := remote.Config().URLs
+	if len(urls) == 0 || urls[0] != url {
+		return fmt.Errorf("remote %q url is %q, expected %q", git.DefaultRemoteName, strings.Join(urls, ", "), url)
+	}
+
+	return nil
+}
+
+// migrateLegacyDirs moves the clone and the state dir from the old repo-name-keyed
+// layout to the url-keyed one, but only if the legacy clone points to the same url.
+func migrateLegacyDirs(baseDir, url string) error {
+	legacyName := RepoNameFromUrl(url)
+	newName := RepoDirNameFromUrl(url)
+
+	repo, err := git.PlainOpen(filepath.Join(baseDir, legacyName))
+	if err != nil {
+		return nil // no legacy clone, nothing to migrate
+	}
+	if err := checkRemoteUrl(repo, url); err != nil {
+		return nil // legacy clone belongs to another repo, leave it alone
+	}
+
+	for _, dir := range []string{baseDir, filepath.Join(baseDir, "storage")} {
+		from := filepath.Join(dir, legacyName)
+		to := filepath.Join(dir, newName)
+		if _, err := os.Stat(from); err != nil {
+			continue
+		}
+		if _, err := os.Stat(to); err == nil {
+			continue
+		}
+		log.Printf("Migrating %s into %s\n", from, to)
+		if err := os.Rename(from, to); err != nil {
+			return fmt.Errorf("unable to migrate %s into %s: %w", from, to, err)
+		}
+	}
+
+	return nil
 }
