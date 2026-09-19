@@ -19,6 +19,13 @@ type Config struct {
 
 	Hooks    *Hooks   `mapstructure:"hooks,omitempty"`
 	Commands []string `mapstructure:"commands"`
+
+	// InitLastPublished has never been read. It is still accepted because
+	// decoding rejects unknown keys, and dropping it would stop every
+	// config that carries it from loading at all.
+	//
+	// Deprecated: use repo.initialLastProcessedTag.
+	InitLastPublished string `mapstructure:"initial_last_published_git_commit"`
 }
 
 type GitRepo struct {
