@@ -69,14 +69,15 @@ func TestValidateQuorums_gpgKeys(t *testing.T) {
 			quorum: Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey, otherPublicKey}},
 		},
 		{
-			name:      "the same key listed twice inline",
-			quorum:    Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey, ed25519PublicKey}},
-			wantError: `quorum "main" gpgKeys[1]: duplicates the GPG key`,
+			// A duplicate is a warning: the config keeps loading and the
+			// duplicate is dropped from the trusted keys, so verification
+			// fails through onQuorumFailure instead.
+			name:   "the same key listed twice inline",
+			quorum: Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey, ed25519PublicKey}},
 		},
 		{
-			name:      "the same key inline and from a file",
-			quorum:    Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey}, GPGKeyFilesPaths: []string{keyFile}},
-			wantError: `quorum "main" gpgKeys[0]: duplicates the GPG key`,
+			name:   "the same key inline and from a file",
+			quorum: Quorum{Name: &name, MinNumberOfKeys: 2, GPGKeys: []string{ed25519PublicKey}, GPGKeyFilesPaths: []string{keyFile}},
 		},
 		{
 			// The verifier drops the whole entry once one of its keys
@@ -102,4 +103,16 @@ func TestValidateQuorums_gpgKeys(t *testing.T) {
 			require.ErrorContains(t, err, tc.wantError)
 		})
 	}
+}
+
+// The same key listed twice must not count for two key holders: the trusted
+// keys of the quorum keep one entry per distinct key, so verification against a
+// two-of-two quorum fails instead of passing on one signature.
+func TestAllGPGKeys_dropsDuplicates(t *testing.T) {
+	key := armoredEd25519PublicKey(t)
+	other := armoredEd25519PublicKey(t)
+
+	keys, err := Quorum{GPGKeys: []string{key, key, other}}.AllGPGKeys()
+	require.NoError(t, err)
+	require.Equal(t, []string{key, other}, keys)
 }

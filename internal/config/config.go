@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -132,13 +133,10 @@ func validateQuorums(quorums []Quorum) error {
 			return err
 		}
 
-		// Counted after the keys are parsed: a quorum is a number of distinct
-		// key holders, not a number of config entries.
-		n, err := validateGPGKeys(q)
-		if err != nil {
+		if err := validateGPGKeys(q); err != nil {
 			return err
 		}
-		if n < q.MinNumberOfKeys {
+		if n := len(q.GPGKeyFilesPaths) + len(q.GPGKeys); n < q.MinNumberOfKeys {
 			return fmt.Errorf("number of GPG keys is less then number of minimum GPG keys. specified: %d, minimum number: %d", n, q.MinNumberOfKeys)
 		}
 	}
@@ -148,33 +146,35 @@ func validateQuorums(quorums []Quorum) error {
 // validateGPGKeys makes sure every trusted key is a parseable armored public
 // key. Doing it here surfaces a misconfigured key as a config error instead of
 // a quorum failure (which would also trigger the onQuorumFailure hook).
-// It returns the number of key entries, and rejects a quorum that lists the
-// same key twice: the verifier drops one entry per matching signature, so a
-// duplicated entry lets a single key holder satisfy minNumberOfKeys > 1. An
-// entry holding several keys still counts as one, for the same reason.
-func validateGPGKeys(q Quorum) (int, error) {
+// A key listed twice is a warning, not an error: the verifier drops one entry
+// per matching signature, so a duplicated entry would let a single key holder
+// satisfy minNumberOfKeys > 1. AllGPGKeys drops the duplicate, so such a quorum
+// keeps loading and fails verification through onQuorumFailure instead of
+// stopping trx from starting at all.
+func validateGPGKeys(q Quorum) error {
 	name := q.DisplayName()
 
-	keys, err := q.AllGPGKeys()
+	keys, err := q.rawGPGKeys()
 	if err != nil {
-		return 0, fmt.Errorf("quorum %q %w", name, err)
+		return fmt.Errorf("quorum %q %w", name, err)
 	}
 
 	seenAt := make(map[string]string)
 	for i, key := range keys {
 		fingerprints, err := validateGPGKey(key)
 		if err != nil {
-			return 0, fmt.Errorf("quorum %q %s: %w", name, q.gpgKeySource(i), err)
+			return fmt.Errorf("quorum %q %s: %w", name, q.gpgKeySource(i), err)
 		}
 		for _, fp := range fingerprints {
 			if prev, ok := seenAt[fp]; ok {
-				return 0, fmt.Errorf("quorum %q %s: duplicates the GPG key %s already listed in %s. a quorum must be made of distinct keys", name, q.gpgKeySource(i), fp, prev)
+				log.Printf("WARNING quorum %q %s duplicates the GPG key %s already listed in %s, and is ignored: a quorum is a number of distinct key holders", name, q.gpgKeySource(i), fp, prev)
+				continue
 			}
 			seenAt[fp] = q.gpgKeySource(i)
 		}
 	}
 
-	return len(keys), nil
+	return nil
 }
 
 // DisplayName names the quorum in logs and errors. The name is optional in the
@@ -189,6 +189,28 @@ func (q Quorum) DisplayName() string {
 // AllGPGKeys returns the trusted keys of the quorum: the inline ones and the
 // contents of every gpgKeyPaths file.
 func (q Quorum) AllGPGKeys() ([]string, error) {
+	keys, err := q.rawGPGKeys()
+	if err != nil {
+		return nil, err
+	}
+
+	// The verifier drops one entry per matching signature, so the same key
+	// listed twice would let a single key holder satisfy minNumberOfKeys.
+	// A key that cannot be parsed is left in place: validation reports it.
+	seen := make(map[string]bool)
+	distinct := keys[:0]
+	for _, key := range keys {
+		fingerprints, err := validateGPGKey(key)
+		if err != nil || !allSeen(seen, fingerprints) {
+			distinct = append(distinct, key)
+		}
+	}
+	return distinct, nil
+}
+
+// rawGPGKeys returns the key entries as they are configured, inline ones after
+// the ones read from files, matching gpgKeySource.
+func (q Quorum) rawGPGKeys() ([]string, error) {
 	keys := make([]string, 0, len(q.GPGKeys)+len(q.GPGKeyFilesPaths))
 	for i, path := range q.GPGKeyFilesPaths {
 		data, err := os.ReadFile(path)
@@ -198,6 +220,19 @@ func (q Quorum) AllGPGKeys() ([]string, error) {
 		keys = append(keys, string(data))
 	}
 	return append(keys, q.GPGKeys...), nil
+}
+
+// allSeen reports whether every fingerprint was already part of the keyring,
+// marking the new ones as seen on the way.
+func allSeen(seen map[string]bool, fingerprints []string) bool {
+	all := true
+	for _, fp := range fingerprints {
+		if !seen[fp] {
+			all = false
+			seen[fp] = true
+		}
+	}
+	return all
 }
 
 // gpgKeySource names the config field a key from AllGPGKeys came from.
