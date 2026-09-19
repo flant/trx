@@ -16,7 +16,6 @@ const TypeLocalStorage = "local"
 
 const (
 	fileLastProcessedCommit = "last_processed_commit"
-	fileLastFailedTag       = "last_failed_tag"
 )
 
 type Local struct {
@@ -71,22 +70,7 @@ func (s *Local) CheckLastSucceedTag() (string, error) {
 }
 
 func (s *Local) StoreSucceedTag(commit string) error {
-	if err := s.write(fileLastProcessedCommit, commit); err != nil {
-		return err
-	}
-	// A tag that succeeded is not a tag to skip anymore.
-	if err := os.Remove(filepath.Join(s.path, fileLastFailedTag)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("error write to local storage: %w", err)
-	}
-	return nil
-}
-
-func (s *Local) CheckLastFailedTag() (string, error) {
-	return s.read(fileLastFailedTag)
-}
-
-func (s *Local) StoreFailedTag(tag string) error {
-	return s.write(fileLastFailedTag, tag)
+	return s.write(fileLastProcessedCommit, commit)
 }
 
 func (s *Local) read(name string) (string, error) {
