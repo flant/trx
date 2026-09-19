@@ -31,3 +31,18 @@ func TestReadmeExampleLoads(t *testing.T) {
 	require.NotEmpty(t, cfg.Quorums)
 	require.Equal(t, "production", cfg.Env[strings.ToLower("WERF_ENV")])
 }
+
+// initial_last_published_git_commit was accepted and ignored in 1.0.0. Since
+// decoding rejects unknown keys, removing the field would stop every config
+// that still carries it from loading.
+func TestLegacyInitLastPublishedStillLoads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trx.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(
+		"repo:\n  url: https://example.com/a.git\n"+
+			"initial_last_published_git_commit: v0.1.0\n"+
+			"commands: [\"echo hi\"]\n"), 0o644))
+
+	cfg := &Config{}
+	require.NoError(t, loadConfig(path, nil, cfg, func() error { return nil }))
+	require.Equal(t, "v0.1.0", cfg.InitLastPublished)
+}
